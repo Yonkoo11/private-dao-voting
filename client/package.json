@@ -1,0 +1,22 @@
+{
+  "name": "private-dao-voting-client",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "generate-proof": "node --loader ts-node/esm src/generate-proof.ts",
+    "cast-vote": "node --loader ts-node/esm src/cast-vote.ts",
+    "create-proposal": "node --loader ts-node/esm src/create-proposal.ts"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.32.0",
+    "@solana/web3.js": "^1.95.0",
+    "circomlibjs": "^0.1.7",
+    "bn.js": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.6",
+    "@types/node": "^22.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.0"
+  }
+}

@@ -1,0 +1,19 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#D4AF37"/>
+      <stop offset="50%" stop-color="#FFD700"/>
+      <stop offset="100%" stop-color="#C9A227"/>
+    </linearGradient>
+    <linearGradient id="goldLight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFD700"/>
+      <stop offset="100%" stop-color="#F7E7CE"/>
+    </linearGradient>
+  </defs>
+  <!-- Top facet -->
+  <polygon points="16,1 27,10 16,12 5,10" fill="url(#goldLight)" opacity="0.95"/>
+  <!-- Left facet -->
+  <polygon points="5,10 16,12 16,31 2,14" fill="url(#goldGrad)" opacity="0.85"/>
+  <!-- Right facet -->
+  <polygon points="27,10 30,14 16,31 16,12" fill="url(#goldGrad)" opacity="0.7"/>
+</svg>
