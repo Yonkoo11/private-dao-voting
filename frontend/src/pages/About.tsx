@@ -160,7 +160,7 @@ export function About() {
       <TerminalCard title="Source Code">
         <div className="source-links">
           <a
-            href="https://github.com"
+            href="https://github.com/private-collective-action"
             target="_blank"
             rel="noopener noreferrer"
             className="source-link"
@@ -169,7 +169,7 @@ export function About() {
           </a>
           <div className="source-structure">
             <pre>{`
-├── circuit/           # Noir ZK circuit
+├── circuits/          # Noir ZK circuit
 │   └── src/main.nr   # Voting proof logic
 ├── programs/          # Solana program
 │   └── lib.rs        # On-chain verification

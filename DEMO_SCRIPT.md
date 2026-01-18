@@ -1,9 +1,10 @@
-# Private DAO Voting - Demo Script (3 minutes)
+# Private Collective Action SDK - Demo Script (3 minutes)
 
 ## Recording Setup
 - Terminal window (dark theme, large font)
 - Browser with Solana Explorer open
-- Frontend at http://localhost:5180/
+- Frontend at http://localhost:5173/
+- Phantom wallet connected to Devnet
 
 ---
 
@@ -111,21 +112,54 @@ All code is open source. Thank you!"
 
 ---
 
+## ALTERNATIVE: Frontend Demo (Browser-Based Voting)
+
+**Show: Browser at http://localhost:5173**
+
+### Step 1: Dashboard
+"The frontend fetches live proposals from Solana devnet. These are real on-chain records."
+
+### Step 2: Select Proposal
+- Click on an active proposal
+- Show the voting interface
+
+### Step 3: Cast Vote
+1. Enter voter secret: `12345`
+2. Select "Approve" or "Reject"
+3. Click "Submit Vote"
+
+**Show: Progress bar during proof generation (~10-30 seconds)**
+
+"Watch the ZK proof being generated in your browser. This is real Noir + Barretenberg WASM running client-side.
+
+The proof proves:
+- I'm in the voter list (Merkle inclusion)
+- I haven't voted yet (nullifier)
+- My vote is valid (0 or 1)"
+
+### Step 4: Transaction Confirmation
+- Show the Solana Explorer link
+- Click to verify the on-chain transaction
+
+"The vote is now recorded on Solana. The transaction stores the proof and nullifier, but my identity is completely hidden."
+
+---
+
 ## Commands Quick Reference
 
 ```bash
-# Start frontend
+# Start frontend (browser-based ZK proving)
 cd /Users/yonko/solana-privacy-hackathon/private-dao-voting/frontend
-npm run dev
+pnpm dev
 
-# Create proposal (use ID 4+ for fresh demo)
+# Create proposal via CLI
 cd /Users/yonko/solana-privacy-hackathon/private-dao-voting/client
 node dist/create-proposal.js 4 "Treasury Allocation" "Allocate 1000 SOL"
 
-# Cast vote (proposal_id, vote, secret)
+# Cast vote via CLI (proposal_id, vote, secret)
 node dist/cast-vote.js 4 1 12345
 
-# Try double vote (will fail)
+# Try double vote (will fail - nullifier exists)
 node dist/cast-vote.js 4 0 12345
 ```
 

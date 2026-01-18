@@ -1,8 +1,37 @@
 // Program and network constants
 
 export const PROGRAM_ID = 'AjHU1SCz7m4U5UgHW6bopAUTXFPupKYa4VrjsjK95SPX';
-export const RPC_ENDPOINT = 'https://api.devnet.solana.com';
 export const CLUSTER = 'devnet';
+
+// RPC Configuration
+// Using Helius RPC for Privacy Hack bounty eligibility
+// Fallback to public devnet RPC if Helius unavailable
+const HELIUS_API_KEY = import.meta.env.VITE_HELIUS_API_KEY || '';
+const QUICKNODE_ENDPOINT = import.meta.env.VITE_QUICKNODE_ENDPOINT || '';
+
+export const RPC_ENDPOINTS = {
+  // Primary: Helius (high-performance, Privacy Hack sponsor)
+  helius: HELIUS_API_KEY
+    ? `https://devnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`
+    : null,
+  // Secondary: Quicknode (Privacy Hack sponsor)
+  quicknode: QUICKNODE_ENDPOINT || null,
+  // Fallback: Public Solana devnet
+  solana: 'https://api.devnet.solana.com',
+} as const;
+
+// Select best available RPC
+export const RPC_ENDPOINT =
+  RPC_ENDPOINTS.helius ||
+  RPC_ENDPOINTS.quicknode ||
+  RPC_ENDPOINTS.solana;
+
+// RPC provider for attribution
+export const RPC_PROVIDER = RPC_ENDPOINTS.helius
+  ? 'Helius'
+  : RPC_ENDPOINTS.quicknode
+  ? 'Quicknode'
+  : 'Solana';
 
 // Demo proposals for hackathon
 export const DEMO_PROPOSAL_IDS = [1, 2, 3, 4];

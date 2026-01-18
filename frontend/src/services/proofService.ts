@@ -2,21 +2,74 @@
  * Proof Service for Private DAO Voting
  *
  * This service handles ZK proof generation for private voting.
- * Uses Noir circuits with the Barretenberg backend.
+ * Uses Noir circuits with the Barretenberg backend for real proof generation.
+ *
+ * IMPORTANT: Barretenberg is dynamically imported to avoid bundling the large
+ * WASM at build time, which causes OOM errors on CI/CD platforms.
  */
+
+import { poseidon2 } from 'poseidon-lite';
+
+// Type definitions for dynamically imported modules
+type NoirType = InstanceType<typeof import('@noir-lang/noir_js').Noir>;
+type BarretenbergBackendType = InstanceType<typeof import('@noir-lang/backend_barretenberg').BarretenbergBackend>;
+type ProofDataType = import('@noir-lang/backend_barretenberg').ProofData;
 
 // Merkle tree depth (matches circuit)
 const TREE_DEPTH = 20;
 
-// Simulated Poseidon hash for demo (real implementation uses Poseidon from circuit)
+// Circuit loading
+let circuitPromise: Promise<object> | null = null;
+let noirInstance: NoirType | null = null;
+let backendInstance: BarretenbergBackendType | null = null;
+
+/**
+ * Poseidon hash using poseidon-lite (browser-compatible)
+ */
 function poseidonHash(a: bigint, b: bigint): bigint {
-  // Simple hash simulation for demo - in production, use actual Poseidon
-  const combined = a.toString(16) + b.toString(16);
-  let hash = BigInt(0);
-  for (let i = 0; i < combined.length; i++) {
-    hash = (hash * BigInt(31) + BigInt(combined.charCodeAt(i))) % (BigInt(2) ** BigInt(254));
+  return poseidon2([a, b]);
+}
+
+/**
+ * Load the compiled Noir circuit
+ */
+async function loadCircuit(): Promise<object> {
+  if (!circuitPromise) {
+    circuitPromise = fetch('/circuits/private_vote.json')
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to load circuit');
+        return res.json();
+      });
   }
-  return hash;
+  return circuitPromise;
+}
+
+/**
+ * Initialize Noir with Barretenberg backend
+ * Uses dynamic imports to avoid bundling large WASM at build time
+ */
+async function initNoir(): Promise<{ noir: NoirType; backend: BarretenbergBackendType }> {
+  if (noirInstance && backendInstance) {
+    return { noir: noirInstance, backend: backendInstance };
+  }
+
+  // Dynamic imports - these load at runtime, not build time
+  const [{ Noir }, { BarretenbergBackend }] = await Promise.all([
+    import('@noir-lang/noir_js'),
+    import('@noir-lang/backend_barretenberg'),
+  ]);
+
+  const circuit = await loadCircuit();
+
+  // Create Barretenberg backend for Groth16 proofs
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  backendInstance = new BarretenbergBackend(circuit as any);
+
+  // Create Noir instance
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  noirInstance = new Noir(circuit as any);
+
+  return { noir: noirInstance, backend: backendInstance };
 }
 
 // Convert string secret to Field element
@@ -38,7 +91,8 @@ function computeNullifier(secret: bigint, proposalId: bigint): bigint {
   return poseidonHash(secret, proposalId);
 }
 
-// Build a simple merkle tree with one voter (for demo)
+// Build a merkle tree with one voter at leftmost position (for demo)
+// In production, this would use actual voter list
 function buildMerkleTree(leaf: bigint): {
   root: bigint;
   siblings: bigint[];
@@ -47,7 +101,7 @@ function buildMerkleTree(leaf: bigint): {
   const siblings: bigint[] = new Array(TREE_DEPTH).fill(BigInt(0));
   const pathIndices: number[] = new Array(TREE_DEPTH).fill(0);
 
-  // Compute root by hashing up the tree (leftmost position)
+  // Compute root by hashing up the tree (leftmost position = all zeros for path)
   let current = leaf;
   for (let i = 0; i < TREE_DEPTH; i++) {
     current = poseidonHash(current, siblings[i]);
@@ -61,6 +115,16 @@ function toHex(value: bigint): string {
   return '0x' + value.toString(16).padStart(64, '0');
 }
 
+// Convert bigint to bytes32
+function bigintToBytes32(n: bigint): Uint8Array {
+  const hex = n.toString(16).padStart(64, '0');
+  const bytes = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) {
+    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
+
 export interface ProofInputs {
   voterSecret: string;
   proposalId: number;
@@ -71,12 +135,14 @@ export interface ProofResult {
   success: boolean;
   proof?: {
     hex: string;
+    bytes: Uint8Array;
     publicInputs: {
       votersRoot: string;
       nullifier: string;
       proposalId: string;
       vote: string;
     };
+    nullifierBytes: Uint8Array;
   };
   error?: string;
   timing?: {
@@ -94,10 +160,7 @@ export interface ProofProgressCallback {
 /**
  * Generate a ZK proof for a private vote
  *
- * This demonstrates the full ZK proof generation flow:
- * 1. Compute inputs from voter secret
- * 2. Build merkle tree membership proof
- * 3. Generate the Groth16 proof
+ * This uses real Noir WASM to generate Groth16 proofs in the browser.
  */
 export async function generateVoteProof(
   inputs: ProofInputs,
@@ -109,80 +172,97 @@ export async function generateVoteProof(
   let provingMs = 0;
 
   try {
-    // Stage 1: Compute circuit inputs
-    onProgress?.('computing_inputs', 'Computing merkle proof inputs...', 0);
-    await sleep(300); // Brief delay for UX
+    // Stage 1: Initialize Noir and compute circuit inputs
+    onProgress?.('computing_inputs', 'Initializing ZK proving system...', 0);
+
+    const { noir, backend } = await initNoir();
+
+    onProgress?.('computing_inputs', 'Computing merkle proof inputs...', 10);
 
     const secret = secretToField(inputs.voterSecret);
     const proposalId = BigInt(inputs.proposalId);
-    // Vote value (used in real circuit proof)
-    const _vote = inputs.vote ? BigInt(1) : BigInt(0);
+    const vote = inputs.vote ? BigInt(1) : BigInt(0);
 
-    // Compute cryptographic commitments
+    // Compute cryptographic commitments using real Poseidon
     const leaf = computeLeaf(secret);
     const nullifier = computeNullifier(secret, proposalId);
-    // Build merkle tree (siblings/pathIndices used in real circuit proof)
-    const { root: votersRoot, siblings: _siblings, pathIndices: _pathIndices } = buildMerkleTree(leaf);
+    const { root: votersRoot, siblings, pathIndices } = buildMerkleTree(leaf);
 
-    // Log circuit inputs for debugging (would be passed to Noir in production)
+    // Prepare circuit inputs in the format Noir expects
+    const circuitInputs = {
+      voters_root: votersRoot.toString(),
+      nullifier: nullifier.toString(),
+      proposal_id: proposalId.toString(),
+      vote: vote.toString(),
+      secret: secret.toString(),
+      path_indices: pathIndices,
+      siblings: siblings.map(s => s.toString()),
+    };
+
     console.log('[ProofService] Circuit inputs prepared:', {
-      vote: _vote.toString(),
+      vote: vote.toString(),
       proposalId: proposalId.toString(),
       leafCommitment: leaf.toString(16).slice(0, 16) + '...',
       nullifier: nullifier.toString(16).slice(0, 16) + '...',
       votersRoot: votersRoot.toString(16).slice(0, 16) + '...',
-      treeDepth: _siblings.length,
-      pathPosition: _pathIndices.join(''),
+      treeDepth: siblings.length,
     });
 
     inputsMs = performance.now() - startTime;
     onProgress?.('computing_inputs', 'Merkle proof inputs computed', 20);
-    await sleep(200);
 
     // Stage 2: Generate witness
     onProgress?.('generating_witness', 'Generating circuit witness...', 20);
     const witnessStart = performance.now();
 
-    // In a real implementation, this would use Noir to generate the witness
-    // For demo, we simulate the computation
-    await sleep(800);
+    // Execute the circuit to generate witness
+    const { witness } = await noir.execute(circuitInputs);
+
     witnessMs = performance.now() - witnessStart;
     onProgress?.('generating_witness', 'Witness generated', 40);
+    console.log('[ProofService] Witness generated in', Math.round(witnessMs), 'ms');
 
     // Stage 3: Generate Groth16 proof
     onProgress?.('proving', 'Generating Groth16 proof (this takes a moment)...', 40);
     const provingStart = performance.now();
 
-    // Simulate proof generation time (real proof takes 5-30 seconds)
-    // In production, this would call: noir.generateProof(circuitInputs)
-    await sleep(2000);
-
-    // Generate a realistic-looking proof (simulated)
-    const proofBytes = new Uint8Array(192);
-    crypto.getRandomValues(proofBytes);
-    const proofHex = '0x' + Array.from(proofBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+    // Generate the actual proof using Barretenberg
+    const proofData: ProofDataType = await backend.generateProof(witness);
 
     provingMs = performance.now() - provingStart;
     onProgress?.('proving', 'Proof generated', 80);
-    await sleep(200);
+    console.log('[ProofService] Proof generated in', Math.round(provingMs), 'ms');
+    console.log('[ProofService] Proof size:', proofData.proof.length, 'bytes');
 
-    // Stage 4: Verify locally (optional but good UX)
+    // Stage 4: Verify locally
     onProgress?.('verifying', 'Verifying proof locally...', 80);
-    await sleep(500);
+
+    const isValid = await backend.verifyProof(proofData);
+
+    if (!isValid) {
+      throw new Error('Proof verification failed');
+    }
+
     onProgress?.('verifying', 'Proof verified', 100);
+    console.log('[ProofService] Proof verified successfully');
 
     const totalMs = performance.now() - startTime;
+
+    // Convert proof to hex string
+    const proofHex = '0x' + Array.from(proofData.proof).map(b => b.toString(16).padStart(2, '0')).join('');
 
     return {
       success: true,
       proof: {
         hex: proofHex,
+        bytes: proofData.proof,
         publicInputs: {
           votersRoot: toHex(votersRoot),
           nullifier: toHex(nullifier),
           proposalId: inputs.proposalId.toString(),
           vote: inputs.vote ? '1' : '0',
         },
+        nullifierBytes: bigintToBytes32(nullifier),
       },
       timing: {
         inputsMs: Math.round(inputsMs),
@@ -192,6 +272,7 @@ export async function generateVoteProof(
       },
     };
   } catch (error) {
+    console.error('[ProofService] Error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error during proof generation',
@@ -200,29 +281,25 @@ export async function generateVoteProof(
 }
 
 /**
- * Verify a proof (client-side verification for demo)
+ * Verify a proof using Barretenberg
  */
 export async function verifyProof(
-  proofHex: string,
-  publicInputs: ProofResult['proof']
+  proofBytes: Uint8Array,
+  publicInputs: string[]
 ): Promise<boolean> {
-  // In production, this would use Barretenberg to verify
-  // For demo, we simulate verification
-  await sleep(300);
+  try {
+    const { backend } = await initNoir();
 
-  // Basic sanity checks
-  if (!proofHex.startsWith('0x') || proofHex.length < 100) {
+    const proofData: ProofDataType = {
+      proof: proofBytes,
+      publicInputs: publicInputs,
+    };
+
+    return await backend.verifyProof(proofData);
+  } catch (error) {
+    console.error('[ProofService] Verification error:', error);
     return false;
   }
-  if (!publicInputs) {
-    return false;
-  }
-
-  return true;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 // Export crypto utilities for use in components
@@ -232,4 +309,6 @@ export const CryptoUtils = {
   computeNullifier,
   buildMerkleTree,
   toHex,
+  bigintToBytes32,
+  poseidonHash,
 };

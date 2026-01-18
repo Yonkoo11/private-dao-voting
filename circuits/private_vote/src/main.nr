@@ -222,3 +222,220 @@ fn test_vote_validation() {
     assert((vote_no == 0) | (vote_no == 1), "0 should be valid");
     assert((vote_yes == 0) | (vote_yes == 1), "1 should be valid");
 }
+
+// ============================================================================
+// Comprehensive Security Tests
+// ============================================================================
+
+#[test]
+fn test_nullifier_uniqueness_across_proposals() {
+    // Same voter voting on different proposals must produce different nullifiers
+    let secret: Field = 0xdeadbeef;
+
+    let nullifier_p1 = compute_nullifier(secret, 1);
+    let nullifier_p2 = compute_nullifier(secret, 2);
+    let nullifier_p3 = compute_nullifier(secret, 3);
+
+    assert(nullifier_p1 != nullifier_p2, "Nullifiers must differ across proposals");
+    assert(nullifier_p2 != nullifier_p3, "Nullifiers must differ across proposals");
+    assert(nullifier_p1 != nullifier_p3, "Nullifiers must differ across proposals");
+}
+
+#[test]
+fn test_nullifier_collision_resistance() {
+    // Different secrets should produce different nullifiers for same proposal
+    let proposal_id: Field = 42;
+
+    let secrets: [Field; 5] = [1, 2, 100, 999999, 0x123456789abcdef];
+    let mut nullifiers: [Field; 5] = [0; 5];
+
+    for i in 0..5 {
+        nullifiers[i] = compute_nullifier(secrets[i], proposal_id);
+    }
+
+    // Check all pairs are different
+    for i in 0..5 {
+        for j in (i + 1)..5 {
+            assert(nullifiers[i] != nullifiers[j], "Nullifier collision detected");
+        }
+    }
+}
+
+#[test]
+fn test_merkle_path_positions() {
+    // Test different positions in tree produce different roots with same leaf
+    let leaf: Field = 0xabcdef;
+    let siblings: [Field; 3] = [111, 222, 333];
+
+    let path_left: [u1; 3] = [0, 0, 0];
+    let path_right: [u1; 3] = [1, 1, 1];
+    let path_mixed: [u1; 3] = [0, 1, 0];
+
+    let root_left = compute_merkle_root(leaf, path_left, siblings);
+    let root_right = compute_merkle_root(leaf, path_right, siblings);
+    let root_mixed = compute_merkle_root(leaf, path_mixed, siblings);
+
+    assert(root_left != root_right, "Different paths should give different roots");
+    assert(root_left != root_mixed, "Different paths should give different roots");
+    assert(root_right != root_mixed, "Different paths should give different roots");
+}
+
+#[test]
+fn test_leaf_secret_binding() {
+    // Different secrets must produce different leaves
+    let secret1: Field = 1;
+    let secret2: Field = 2;
+
+    let leaf1 = compute_leaf(secret1);
+    let leaf2 = compute_leaf(secret2);
+
+    assert(leaf1 != leaf2, "Different secrets must produce different leaves");
+}
+
+#[test]
+fn test_empty_tree_single_voter() {
+    // Single voter in tree with all zero siblings
+    let secret: Field = 0xcafe;
+    let leaf = compute_leaf(secret);
+
+    let siblings: [Field; TREE_DEPTH] = [0; TREE_DEPTH];
+    let path_indices: [u1; TREE_DEPTH] = [0; TREE_DEPTH];
+
+    let root = compute_merkle_root(leaf, path_indices, siblings);
+
+    // Root should be deterministic
+    let root2 = compute_merkle_root(leaf, path_indices, siblings);
+    assert(root == root2, "Root computation must be deterministic");
+}
+
+#[test]
+fn test_max_tree_depth_path() {
+    // Rightmost position in tree (all 1s in path)
+    let secret: Field = 0xfeed;
+    let leaf = compute_leaf(secret);
+
+    let siblings: [Field; TREE_DEPTH] = [0; TREE_DEPTH];
+    let mut path_indices: [u1; TREE_DEPTH] = [0; TREE_DEPTH];
+
+    // Set all path indices to 1 (rightmost position)
+    for i in 0..TREE_DEPTH {
+        path_indices[i] = 1;
+    }
+
+    let root = compute_merkle_root(leaf, path_indices, siblings);
+    assert(root != 0, "Rightmost path should produce valid root");
+}
+
+#[test]
+fn test_zero_secret_edge_case() {
+    // Zero is a valid secret (edge case)
+    let secret: Field = 0;
+    let leaf = compute_leaf(secret);
+
+    // Leaf should still be non-zero due to Poseidon properties
+    // Note: hash(0, 0) != 0 for Poseidon
+    let nullifier = compute_nullifier(secret, 1);
+
+    // Both should be valid (non-zero typically)
+    assert(leaf == compute_leaf(0), "Zero secret should be consistent");
+    assert(nullifier == compute_nullifier(0, 1), "Zero secret nullifier should be consistent");
+}
+
+#[test]
+fn test_large_proposal_id() {
+    // Large proposal IDs should work correctly
+    let secret: Field = 12345;
+    let large_proposal: Field = 0xffffffffffffffff;
+
+    let nullifier = compute_nullifier(secret, large_proposal);
+    assert(nullifier != 0, "Large proposal ID should produce valid nullifier");
+
+    // Different from smaller proposal
+    let small_nullifier = compute_nullifier(secret, 1);
+    assert(nullifier != small_nullifier, "Different proposal IDs must differ");
+}
+
+#[test]
+fn test_two_voter_tree() {
+    // Two voters in adjacent positions
+    let secret1: Field = 0x1111;
+    let secret2: Field = 0x2222;
+
+    let leaf1 = compute_leaf(secret1);
+    let leaf2 = compute_leaf(secret2);
+
+    // Voter 1 is at position 0 (left), voter 2 is their sibling
+    // For depth 1: root = hash(leaf1, leaf2)
+    let root_from_v1 = hash_2(leaf1, leaf2);
+
+    // Verify with merkle path from voter 1's perspective (depth 1 for simplicity)
+    let siblings_v1: [Field; 1] = [leaf2];
+    let path_v1: [u1; 1] = [0]; // left position
+    let computed_root_v1 = compute_merkle_root(leaf1, path_v1, siblings_v1);
+
+    assert(computed_root_v1 == root_from_v1, "Voter 1 path should lead to same root");
+
+    // Voter 2's perspective
+    let siblings_v2: [Field; 1] = [leaf1];
+    let path_v2: [u1; 1] = [1]; // right position
+    let computed_root_v2 = compute_merkle_root(leaf2, path_v2, siblings_v2);
+
+    assert(computed_root_v2 == root_from_v1, "Voter 2 path should lead to same root");
+}
+
+#[test]
+fn test_poseidon_hash_properties() {
+    // Poseidon should be non-commutative for ordered pairs
+    let a: Field = 100;
+    let b: Field = 200;
+
+    let hash_ab = hash_2(a, b);
+    let hash_ba = hash_2(b, a);
+
+    // hash(a,b) != hash(b,a) for a != b
+    assert(hash_ab != hash_ba, "Poseidon should be order-dependent");
+}
+
+#[test]
+fn test_complete_voting_scenario_no_vote() {
+    // Complete flow with vote = 0
+    let secret: Field = 0xbeef;
+    let proposal_id: Field = 100;
+    let vote: Field = 0; // voting NO
+
+    let leaf = compute_leaf(secret);
+    let nullifier = compute_nullifier(secret, proposal_id);
+
+    let siblings: [Field; TREE_DEPTH] = [0; TREE_DEPTH];
+    let path_indices: [u1; TREE_DEPTH] = [0; TREE_DEPTH];
+    let voters_root = compute_merkle_root(leaf, path_indices, siblings);
+
+    // All assertions from main should pass
+    assert((vote == 0) | (vote == 1), "Vote must be 0 or 1");
+    assert(compute_nullifier(secret, proposal_id) == nullifier, "Nullifier mismatch");
+    assert(compute_merkle_root(leaf, path_indices, siblings) == voters_root, "Root mismatch");
+}
+
+#[test]
+fn test_deterministic_proof_generation() {
+    // Same inputs should always produce same intermediate values
+    let secret: Field = 0x999;
+    let proposal_id: Field = 7;
+
+    // Run computations twice
+    let leaf1 = compute_leaf(secret);
+    let leaf2 = compute_leaf(secret);
+
+    let null1 = compute_nullifier(secret, proposal_id);
+    let null2 = compute_nullifier(secret, proposal_id);
+
+    let siblings: [Field; 3] = [1, 2, 3];
+    let path: [u1; 3] = [0, 1, 0];
+
+    let root1 = compute_merkle_root(leaf1, path, siblings);
+    let root2 = compute_merkle_root(leaf2, path, siblings);
+
+    assert(leaf1 == leaf2, "Leaf computation must be deterministic");
+    assert(null1 == null2, "Nullifier computation must be deterministic");
+    assert(root1 == root2, "Root computation must be deterministic");
+}

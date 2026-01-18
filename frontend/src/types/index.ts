@@ -11,6 +11,7 @@ export interface Proposal {
   votingEndsAt: number; // Unix timestamp
   isFinalized: boolean;
   createdAt: number;
+  pubkey?: string; // On-chain account address
 }
 
 export type ProposalStatus = 'active' | 'ended' | 'finalized';
