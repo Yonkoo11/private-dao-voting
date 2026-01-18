@@ -59,16 +59,20 @@ export function CreateProposal() {
     setError(null);
     setIsSubmitting(true);
 
-    // Simulate transaction
+    // DEMO MODE: Simulates transaction - not yet connected to Solana program
+    // TODO: Replace with actual createProposal transaction when program is deployed
     await new Promise(r => setTimeout(r, 2000));
 
-    // Redirect to the new proposal
-    const newId = 5; // Would be from chain
+    // Redirect to the new proposal (demo ID)
+    const newId = 5;
     navigate(`/proposal/${newId}${location.search}`);
   };
 
   return (
     <div className="create-proposal">
+      <div className="demo-banner" role="alert">
+        Demo Mode - Proposal creation simulated (not submitted to chain)
+      </div>
       <TerminalCard title="CREATE::NEW_PROPOSAL">
         <div className="form-section">
           <div className="input-group">
@@ -136,6 +140,7 @@ export function CreateProposal() {
                 className="voter-remove"
                 onClick={() => removeVoterSecret(secret)}
                 disabled={isSubmitting}
+                aria-label={`Remove voter ${i + 1}`}
               >
                 ×
               </button>

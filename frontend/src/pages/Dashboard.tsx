@@ -3,6 +3,24 @@ import { Link, useLocation } from 'react-router-dom';
 import { fetchProposals } from '../services/solanaService';
 import type { Proposal, FilterType } from '../types';
 
+// Animated hash component
+function ScrambleHash() {
+  const [hash, setHash] = useState('0x7f3a8b2c9d4e5f6a');
+  const chars = '0123456789abcdef';
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const newHash = '0x' + Array.from({ length: 16 }, () =>
+        chars[Math.floor(Math.random() * chars.length)]
+      ).join('');
+      setHash(newHash);
+    }, 100);
+    return () => clearInterval(interval);
+  }, []);
+
+  return <span className="encryption-hash">{hash}...</span>;
+}
+
 // Demo proposals as fallback when chain is unavailable
 const DEMO_PROPOSALS: Proposal[] = [
   {
@@ -88,20 +106,16 @@ export function Dashboard() {
     async function loadProposals() {
       setLoading(true);
       try {
-        console.log('[Dashboard] Fetching proposals from chain...');
         const chainProposals = await fetchProposals();
 
         if (chainProposals.length > 0) {
-          console.log('[Dashboard] Loaded', chainProposals.length, 'proposals from chain');
           setProposals(chainProposals);
           setDataSource('chain');
         } else {
-          console.log('[Dashboard] No proposals on chain, using demo data');
           setProposals(DEMO_PROPOSALS);
           setDataSource('demo');
         }
-      } catch (error) {
-        console.error('[Dashboard] Failed to fetch proposals:', error);
+      } catch {
         setProposals(DEMO_PROPOSALS);
         setDataSource('demo');
       } finally {
@@ -238,17 +252,83 @@ export function Dashboard() {
         </div>
 
         <div className="empty-panel">
-          <svg className="empty-panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-          </svg>
-          <h3 className="empty-panel-title">Private Collective Action</h3>
+          {/* Animated particle background */}
+          <div className="particles-container">
+            {[...Array(20)].map((_, i) => (
+              <div key={i} className="particle" style={{ '--delay': `${i * 0.5}s`, '--x': `${Math.random() * 100}%`, '--duration': `${15 + Math.random() * 10}s` } as React.CSSProperties} />
+            ))}
+          </div>
+
+          {/* Circuit lines background */}
+          <div className="circuit-lines">
+            <svg className="circuit-svg" viewBox="0 0 400 300" preserveAspectRatio="none" aria-hidden="true">
+              <path className="circuit-path" d="M0,150 H100 L120,100 H200 L220,150 H300 L320,100 H400" />
+              <path className="circuit-path delay-1" d="M0,200 H80 L100,250 H180 L200,200 H280 L300,250 H400" />
+              <path className="circuit-path delay-2" d="M0,100 H60 L80,50 H160 L180,100 H260 L280,50 H400" />
+              <circle className="circuit-node" cx="120" cy="100" r="4" />
+              <circle className="circuit-node delay-1" cx="220" cy="150" r="4" />
+              <circle className="circuit-node delay-2" cx="320" cy="100" r="4" />
+              <circle className="circuit-node delay-3" cx="100" cy="250" r="4" />
+              <circle className="circuit-node delay-4" cx="200" cy="200" r="4" />
+            </svg>
+          </div>
+
+          {/* Main ZK Shield Visualization */}
+          <div className="zk-visualization">
+            <div className="shield-container">
+              <div className="shield-glow" />
+              <div className="shield-ring ring-1" />
+              <div className="shield-ring ring-2" />
+              <div className="shield-ring ring-3" />
+              <svg className="shield-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+                <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+              <div className="lock-icon">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M12 1C8.676 1 6 3.676 6 7v2H4v14h16V9h-2V7c0-3.324-2.676-6-6-6zm0 2c2.276 0 4 1.724 4 4v2H8V7c0-2.276 1.724-4 4-4zm0 10c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2z"/>
+                </svg>
+              </div>
+            </div>
+
+            {/* Orbiting data nodes */}
+            <div className="orbit orbit-1">
+              <div className="orbit-node" />
+            </div>
+            <div className="orbit orbit-2">
+              <div className="orbit-node" />
+            </div>
+            <div className="orbit orbit-3">
+              <div className="orbit-node" />
+            </div>
+          </div>
+
+          <h3 className="empty-panel-title">
+            <span className="title-prefix">Zero-Knowledge</span>
+            <span className="title-main">Private Voting</span>
+          </h3>
           <p className="empty-panel-text">
-            Select a proposal from the list to view details and cast your anonymous vote using zero-knowledge proofs.
+            Cast anonymous votes with cryptographic proofs. Your choice remains hidden—even from the DAO.
           </p>
+
           <div className="feature-badges">
-            <span className="feature-badge">ZK Proofs</span>
-            <span className="feature-badge">Solana</span>
-            <span className="feature-badge">Anonymous</span>
+            <span className="feature-badge">
+              <span className="badge-icon">◈</span>
+              ZK Proofs
+            </span>
+            <span className="feature-badge">
+              <span className="badge-icon">◎</span>
+              Solana
+            </span>
+            <span className="feature-badge">
+              <span className="badge-icon">◉</span>
+              Anonymous
+            </span>
+          </div>
+
+          {/* Animated encryption text */}
+          <div className="encryption-display">
+            <span className="encryption-label">Proof:</span>
+            <ScrambleHash />
           </div>
         </div>
       </div>

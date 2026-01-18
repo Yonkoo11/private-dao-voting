@@ -9,8 +9,10 @@ export function Register() {
   const [checkResult, setCheckResult] = useState<'eligible' | 'not_eligible' | null>(null);
 
   const generateSecret = () => {
-    // Generate a random secret (in production, use crypto.getRandomValues)
-    const secret = Math.floor(Math.random() * 1000000000000).toString();
+    // Generate a cryptographically secure random secret
+    const array = new Uint32Array(3);
+    crypto.getRandomValues(array);
+    const secret = Array.from(array).map(n => n.toString(36)).join('').slice(0, 16);
     setGeneratedSecret(secret);
     setCopied(false);
   };
@@ -126,18 +128,17 @@ export function Register() {
         </div>
       </TerminalCard>
 
-      <TerminalCard title="Demo Info">
-        <div className="demo-info">
-          <p>For the hackathon demo, use this pre-registered voter secret:</p>
-          <div className="demo-secret">
-            <span className="demo-label">Demo Secret</span>
-            <code className="demo-value">{DEMO_VOTER_SECRET}</code>
+      {import.meta.env.DEV && (
+        <TerminalCard title="Demo Mode">
+          <div className="demo-info">
+            <div className="warning-box">
+              <span className="warning-icon">!</span>
+              <span>Development mode only - hidden in production</span>
+            </div>
+            <p>For testing, use the pre-registered voter secret: <code>12345</code></p>
           </div>
-          <p className="demo-note">
-            This secret is already registered in all demo proposals.
-          </p>
-        </div>
-      </TerminalCard>
+        </TerminalCard>
+      )}
     </div>
   );
 }

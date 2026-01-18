@@ -83,7 +83,15 @@ export function ProposalView() {
     progress: 0,
   });
   const [error, setError] = useState<string | null>(null);
-  const [currentTime] = useState(() => Date.now());
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+
+  // Update currentTime every minute to keep status accurate
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Wallet
   const { publicKey, signTransaction, connected } = useWallet();
@@ -99,17 +107,14 @@ export function ProposalView() {
         const chainProposal = await fetchProposal(proposalId);
         if (chainProposal) {
           setProposal(chainProposal);
-          console.log('[ProposalView] Loaded from chain:', chainProposal);
         } else {
           // Fall back to demo data
           const demo = demoProposals[proposalId];
           if (demo) {
             setProposal(demo);
-            console.log('[ProposalView] Using demo data');
           }
         }
-      } catch (err) {
-        console.error('[ProposalView] Failed to load:', err);
+      } catch {
         const demo = demoProposals[proposalId];
         if (demo) setProposal(demo);
       } finally {
@@ -193,12 +198,6 @@ export function ProposalView() {
         throw new Error(proofResult.error || 'Proof generation failed');
       }
 
-      console.log('[ProposalView] Proof generated:', {
-        proofSize: proofResult.proof.bytes.length,
-        nullifier: proofResult.proof.publicInputs.nullifier.slice(0, 20) + '...',
-        timing: proofResult.timing,
-      });
-
       // Stage 2: Check if nullifier already used
       setProofState({
         stage: 'submitting',
@@ -227,8 +226,6 @@ export function ProposalView() {
         signTransaction
       );
 
-      console.log('[ProposalView] Transaction confirmed:', signature);
-
       // Stage 4: Success!
       setProofState({
         stage: 'idle',
@@ -249,7 +246,6 @@ export function ProposalView() {
         setProposal(updatedProposal);
       }
     } catch (err) {
-      console.error('[ProposalView] Vote failed:', err);
       setError(err instanceof Error ? err.message : 'Vote failed');
       setProofState({
         stage: 'idle',
@@ -263,8 +259,8 @@ export function ProposalView() {
 
   return (
     <div className="proposal-view">
-      <Link to={`/${location.search}`} className="back-link">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+      <Link to={`/${location.search}`} className="back-link" aria-label="Back to proposals list">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16" aria-hidden="true">
           <path d="M19 12H5m7-7-7 7 7 7" />
         </svg>
         Back to proposals
@@ -328,13 +324,15 @@ export function ProposalView() {
                 </span>
               </div>
 
-              <div className="vote-options">
+              <div className="vote-options" role="group" aria-label="Vote options">
                 <button
                   className={`vote-option approve ${selectedVote === 1 ? 'selected' : ''}`}
                   onClick={() => setSelectedVote(1)}
                   disabled={isVoting}
+                  aria-label="Vote to approve this proposal"
+                  aria-pressed={selectedVote === 1}
                 >
-                  <span className="vote-option-icon">
+                  <span className="vote-option-icon" aria-hidden="true">
                     <svg viewBox="0 0 16 16" fill="currentColor" width="20" height="20">
                       <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z" />
                     </svg>
@@ -345,8 +343,10 @@ export function ProposalView() {
                   className={`vote-option reject ${selectedVote === 0 ? 'selected' : ''}`}
                   onClick={() => setSelectedVote(0)}
                   disabled={isVoting}
+                  aria-label="Vote to reject this proposal"
+                  aria-pressed={selectedVote === 0}
                 >
-                  <span className="vote-option-icon">
+                  <span className="vote-option-icon" aria-hidden="true">
                     <svg viewBox="0 0 16 16" fill="currentColor" width="20" height="20">
                       <path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.75.75 0 111.06 1.06L9.06 8l3.22 3.22a.75.75 0 11-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 01-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z" />
                     </svg>

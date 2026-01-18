@@ -13,7 +13,7 @@ import {
   SystemProgram,
 } from '@solana/web3.js';
 import BN from 'bn.js';
-import { PROGRAM_ID, RPC_ENDPOINT, RPC_PROVIDER } from '../lib/constants';
+import { PROGRAM_ID, RPC_ENDPOINT } from '../lib/constants';
 import type { Proposal } from '../types';
 
 // Anchor discriminators (first 8 bytes of sha256("global:method_name"))
@@ -42,7 +42,6 @@ let connectionInstance: Connection | null = null;
 export function getConnection(): Connection {
   if (!connectionInstance) {
     connectionInstance = new Connection(RPC_ENDPOINT, 'confirmed');
-    console.log(`[SolanaService] Connected via ${RPC_PROVIDER} RPC`);
   }
   return connectionInstance;
 }
@@ -131,8 +130,7 @@ function deserializeProposal(data: Buffer, pubkey: PublicKey): Proposal | null {
       createdAt: Date.now() - 86400000, // Approximate, not stored on-chain
       pubkey: pubkey.toBase58(),
     };
-  } catch (error) {
-    console.error('[SolanaService] Failed to deserialize proposal:', error);
+  } catch {
     return null;
   }
 }
@@ -153,8 +151,6 @@ export async function fetchProposals(): Promise<Proposal[]> {
       ],
     });
 
-    console.log('[SolanaService] Found', accounts.length, 'proposal accounts');
-
     const proposals: Proposal[] = [];
     for (const { pubkey, account } of accounts) {
       const proposal = deserializeProposal(Buffer.from(account.data), pubkey);
@@ -167,8 +163,7 @@ export async function fetchProposals(): Promise<Proposal[]> {
     proposals.sort((a, b) => a.id - b.id);
 
     return proposals;
-  } catch (error) {
-    console.error('[SolanaService] Failed to fetch proposals:', error);
+  } catch {
     return [];
   }
 }
@@ -184,13 +179,11 @@ export async function fetchProposal(proposalId: number): Promise<Proposal | null
     const accountInfo = await connection.getAccountInfo(proposalPda);
 
     if (!accountInfo) {
-      console.log('[SolanaService] Proposal not found:', proposalId);
       return null;
     }
 
     return deserializeProposal(Buffer.from(accountInfo.data), proposalPda);
-  } catch (error) {
-    console.error('[SolanaService] Failed to fetch proposal:', error);
+  } catch {
     return null;
   }
 }
@@ -265,16 +258,12 @@ export async function submitVoteTransaction(
   // Send and confirm
   const signature = await connection.sendRawTransaction(signedTx.serialize());
 
-  console.log('[SolanaService] Transaction sent:', signature);
-
   // Wait for confirmation
   await connection.confirmTransaction({
     signature,
     blockhash,
     lastValidBlockHeight,
   });
-
-  console.log('[SolanaService] Transaction confirmed');
 
   return signature;
 }

@@ -199,15 +199,6 @@ export async function generateVoteProof(
       siblings: siblings.map(s => s.toString()),
     };
 
-    console.log('[ProofService] Circuit inputs prepared:', {
-      vote: vote.toString(),
-      proposalId: proposalId.toString(),
-      leafCommitment: leaf.toString(16).slice(0, 16) + '...',
-      nullifier: nullifier.toString(16).slice(0, 16) + '...',
-      votersRoot: votersRoot.toString(16).slice(0, 16) + '...',
-      treeDepth: siblings.length,
-    });
-
     inputsMs = performance.now() - startTime;
     onProgress?.('computing_inputs', 'Merkle proof inputs computed', 20);
 
@@ -220,7 +211,6 @@ export async function generateVoteProof(
 
     witnessMs = performance.now() - witnessStart;
     onProgress?.('generating_witness', 'Witness generated', 40);
-    console.log('[ProofService] Witness generated in', Math.round(witnessMs), 'ms');
 
     // Stage 3: Generate Groth16 proof
     onProgress?.('proving', 'Generating Groth16 proof (this takes a moment)...', 40);
@@ -231,8 +221,6 @@ export async function generateVoteProof(
 
     provingMs = performance.now() - provingStart;
     onProgress?.('proving', 'Proof generated', 80);
-    console.log('[ProofService] Proof generated in', Math.round(provingMs), 'ms');
-    console.log('[ProofService] Proof size:', proofData.proof.length, 'bytes');
 
     // Stage 4: Verify locally
     onProgress?.('verifying', 'Verifying proof locally...', 80);
@@ -244,7 +232,6 @@ export async function generateVoteProof(
     }
 
     onProgress?.('verifying', 'Proof verified', 100);
-    console.log('[ProofService] Proof verified successfully');
 
     const totalMs = performance.now() - startTime;
 
@@ -272,7 +259,6 @@ export async function generateVoteProof(
       },
     };
   } catch (error) {
-    console.error('[ProofService] Error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error during proof generation',
@@ -296,8 +282,7 @@ export async function verifyProof(
     };
 
     return await backend.verifyProof(proofData);
-  } catch (error) {
-    console.error('[ProofService] Verification error:', error);
+  } catch {
     return false;
   }
 }
