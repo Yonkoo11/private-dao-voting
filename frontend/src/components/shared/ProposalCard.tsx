@@ -22,9 +22,13 @@ function formatTimeRemaining(timestamp: number): string {
 
   if (hours > 24) {
     const days = Math.floor(hours / 24);
-    return `${days}d ${hours % 24}h left`;
+    return `Ends in ${days}d ${hours % 24}h`;
   }
-  return `${hours}h ${mins}m left`;
+  return `Ends in ${hours}h ${mins}m`;
+}
+
+function formatShortId(id: number): string {
+  return `0x${id.toString(16).padStart(4, '0')}`;
 }
 
 export function ProposalCard({ proposal, compact = false }: ProposalCardProps) {
@@ -34,9 +38,9 @@ export function ProposalCard({ proposal, compact = false }: ProposalCardProps) {
   const yesPercent = totalVotes > 0 ? Math.round((proposal.yesVotes / totalVotes) * 100) : 0;
 
   const statusLabels: Record<ProposalStatus, string> = {
-    active: 'Active',
-    ended: 'Ended',
-    finalized: 'Final',
+    active: 'ACTIVE',
+    ended: 'ENDED',
+    finalized: 'FINAL',
   };
 
   return (
@@ -44,46 +48,41 @@ export function ProposalCard({ proposal, compact = false }: ProposalCardProps) {
       to={`/proposal/${proposal.id}${location.search}`}
       className={`proposal-card-link status-${status}`}
     >
-      <article className={`proposal-card ${compact ? 'compact' : ''}`}>
-        <div className="proposal-card-header">
-          <span className="proposal-id">#{String(proposal.id).padStart(4, '0')}</span>
-          <span className={`status-badge ${status}`}>
-            {statusLabels[status]}
-          </span>
-        </div>
+      <article className="proposal-card">
+        <div className="proposal-card-content">
+          <h3 className="proposal-card-title">{proposal.title}</h3>
 
-        <h3 className="proposal-card-title">{proposal.title}</h3>
-
-        {!compact && (
-          <p className="proposal-card-description">
-            {proposal.description.length > 100
-              ? proposal.description.slice(0, 100) + '...'
-              : proposal.description}
-          </p>
-        )}
-
-        <div className="proposal-card-stats">
-          <div className="vote-bar">
-            <div
-              className="vote-bar-yes"
-              style={{ width: `${yesPercent}%` }}
-            />
+          <div className="proposal-card-meta">
+            <span className="proposal-id">{formatShortId(proposal.id)}</span>
+            <span className="landing-stats-divider">·</span>
+            {status === 'active' ? (
+              <span className="time-remaining">{formatTimeRemaining(proposal.votingEndsAt)}</span>
+            ) : (
+              <span className={`status-badge ${status}`}>{statusLabels[status]}</span>
+            )}
           </div>
-          <div className="vote-counts">
-            <span className="vote-yes">{proposal.yesVotes} approve</span>
-            <span className="vote-no">{proposal.noVotes} reject</span>
-          </div>
-        </div>
 
-        <div className="proposal-card-footer">
-          {status === 'active' ? (
-            <span className="time-remaining">
-              {formatTimeRemaining(proposal.votingEndsAt)}
-            </span>
-          ) : (
-            <span className="total-votes">{totalVotes} votes</span>
+          {!compact && (
+            <div className="proposal-card-stats">
+              <div className="vote-bar">
+                <div
+                  className="vote-bar-yes"
+                  style={{ width: `${yesPercent}%` }}
+                />
+              </div>
+              <div className="vote-counts">
+                <span className="vote-yes">YES {proposal.yesVotes}</span>
+                <span className="vote-no">NO {proposal.noVotes}</span>
+              </div>
+            </div>
           )}
         </div>
+
+        {status === 'active' && (
+          <div className="proposal-card-action">
+            <span className="vote-cta">VOTE</span>
+          </div>
+        )}
       </article>
     </Link>
   );

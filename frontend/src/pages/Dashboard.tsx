@@ -130,114 +130,116 @@ export function Dashboard() {
 
   return (
     <div className="dashboard">
-      {/* Stats Bar */}
-      <div className="stats-bar">
-        <div className="stat-item">
-          <span className="stat-value">{proposals.length}</span>
-          <span className="stat-label">Proposals</span>
+      <div className="dashboard-content">
+        {/* Stats Bar */}
+        <div className="stats-bar">
+          <div className="stat-item">
+            <span className="stat-value">{proposals.length}</span>
+            <span className="stat-label">proposals</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-value">{totalVotes}</span>
+            <span className="stat-label">votes cast</span>
+          </div>
+          <div className="stat-item highlight">
+            <span className="stat-value">{counts.active}</span>
+            <span className="stat-label">active now</span>
+          </div>
+          <div className="data-source-indicator">
+            {dataSource === 'chain' ? (
+              <span className="source-badge chain">On-Chain</span>
+            ) : (
+              <span className="source-badge demo">Demo</span>
+            )}
+          </div>
         </div>
-        <div className="stat-item">
-          <span className="stat-value">{totalVotes}</span>
-          <span className="stat-label">Votes Cast</span>
-        </div>
-        <div className="stat-item highlight">
-          <span className="stat-value">{counts.active}</span>
-          <span className="stat-label">Active Now</span>
-        </div>
-        <div className="data-source-indicator">
-          {dataSource === 'chain' ? (
-            <span className="source-badge chain">On-Chain</span>
-          ) : (
-            <span className="source-badge demo">Demo</span>
+
+        {/* Filter Tabs + Create Button */}
+        <div className="section-header">
+          <div className="filter-tabs">
+            {filters.map(f => (
+              <button
+                key={f.key}
+                className={`filter-tab ${filter === f.key ? 'active' : ''}`}
+                onClick={() => setFilter(f.key)}
+              >
+                {f.label}
+                <span className="filter-count">{counts[f.key]}</span>
+              </button>
+            ))}
+          </div>
+          {isAuthority && (
+            <Link to={`/create${location.search}`} className="create-btn">
+              Create Proposal
+            </Link>
           )}
         </div>
-      </div>
 
-      {/* Filter Tabs + Create Button */}
-      <div className="section-header">
-        <div className="filter-tabs">
-          {filters.map(f => (
-            <button
-              key={f.key}
-              className={`filter-tab ${filter === f.key ? 'active' : ''}`}
-              onClick={() => setFilter(f.key)}
-            >
-              {f.label}
-              <span className="filter-count">{counts[f.key]}</span>
-            </button>
-          ))}
-        </div>
-        {isAuthority && (
-          <Link to={`/create${location.search}`} className="create-btn">
-            Create Proposal
-          </Link>
-        )}
-      </div>
-
-      {/* Loading State */}
-      {loading ? (
-        <div className="loading-state">
-          <span>Loading proposals...</span>
-        </div>
-      ) : (
-        <>
-          {/* Active Proposals Section */}
-          {(filter === 'all' || filter === 'active') && activeProposals.length > 0 && (
-            <div className="dashboard-section">
-              <div className="dashboard-section-header">
-                <h2 className="dashboard-section-title">Active Proposals</h2>
-              </div>
-              <div className="proposal-grid">
-                {activeProposals.map((proposal, index) => (
-                  <ProposalCard key={proposal.id} proposal={proposal} index={index} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Completed Proposals Section */}
-          {(filter === 'all' ? completedProposals.length > 0 : (filter !== 'active' && filteredProposals.length > 0)) && (
-            <div className="dashboard-section">
-              <div className="dashboard-section-header">
-                <h2 className="dashboard-section-title">
-                  {filter === 'all' ? 'Completed' : filter === 'ended' ? 'Ended' : 'Finalized'}
-                </h2>
-                {filter === 'all' && (
-                  <button
-                    className="dashboard-section-toggle"
-                    onClick={() => setShowCompleted(!showCompleted)}
-                  >
-                    {showCompleted ? 'Hide' : 'Show'}
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 16 16"
-                      fill="currentColor"
-                      style={{ transform: showCompleted ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
-                    >
-                      <path d="M4.427 6.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 6H4.604a.25.25 0 00-.177.427z" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-              {(filter !== 'all' || showCompleted) && (
+        {/* Loading State */}
+        {loading ? (
+          <div className="loading-state">
+            <span>Loading proposals...</span>
+          </div>
+        ) : (
+          <>
+            {/* Active Proposals Section */}
+            {(filter === 'all' || filter === 'active') && activeProposals.length > 0 && (
+              <div className="dashboard-section">
+                <div className="dashboard-section-header">
+                  <h2 className="dashboard-section-title">Active Proposals</h2>
+                </div>
                 <div className="proposal-grid">
-                  {(filter === 'all' ? completedProposals : filteredProposals).map((proposal, index) => (
+                  {activeProposals.map((proposal, index) => (
                     <ProposalCard key={proposal.id} proposal={proposal} index={index} />
                   ))}
                 </div>
-              )}
-            </div>
-          )}
+              </div>
+            )}
 
-          {/* Empty State */}
-          {filteredProposals.length === 0 && (
-            <div className="empty-state">
-              <p>No proposals found</p>
-            </div>
-          )}
-        </>
-      )}
+            {/* Completed Proposals Section */}
+            {(filter === 'all' ? completedProposals.length > 0 : (filter !== 'active' && filteredProposals.length > 0)) && (
+              <div className="dashboard-section">
+                <div className="dashboard-section-header">
+                  <h2 className="dashboard-section-title">
+                    {filter === 'all' ? 'Completed' : filter === 'ended' ? 'Ended' : 'Finalized'}
+                  </h2>
+                  {filter === 'all' && (
+                    <button
+                      className="dashboard-section-toggle"
+                      onClick={() => setShowCompleted(!showCompleted)}
+                    >
+                      {showCompleted ? 'Hide' : 'Show'}
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 16 16"
+                        fill="currentColor"
+                        style={{ transform: showCompleted ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
+                      >
+                        <path d="M4.427 6.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 6H4.604a.25.25 0 00-.177.427z" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+                {(filter !== 'all' || showCompleted) && (
+                  <div className="proposal-grid">
+                    {(filter === 'all' ? completedProposals : filteredProposals).map((proposal, index) => (
+                      <ProposalCard key={proposal.id} proposal={proposal} index={index} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Empty State */}
+            {filteredProposals.length === 0 && (
+              <div className="empty-state">
+                <p>No proposals found</p>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

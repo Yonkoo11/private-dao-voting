@@ -1,3 +1,4 @@
+export { Landing } from './Landing';
 export { Dashboard } from './Dashboard';
 export { ProposalView } from './ProposalView';
 export { CreateProposal } from './CreateProposal';

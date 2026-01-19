@@ -1,9 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { TerminalCard } from '../components/shared';
 import { DEMO_VOTER_SECRET } from '../lib/constants';
 
-// Simple hash function for demo merkle root visualization
 function hashSecrets(secrets: string[]): string {
   let hash = 0;
   const str = secrets.join('|');
@@ -21,16 +19,16 @@ export function CreateProposal() {
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [duration, setDuration] = useState<number>(3600); // 1 hour default
+  const [duration, setDuration] = useState<number>(3600);
   const [voterSecrets, setVoterSecrets] = useState<string[]>([DEMO_VOTER_SECRET]);
   const [newSecret, setNewSecret] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const durationOptions = [
-    { value: 3600, label: '1 HOUR' },
-    { value: 21600, label: '6 HOURS' },
-    { value: 86400, label: '24 HOURS' },
+    { value: 3600, label: '1 Hour' },
+    { value: 21600, label: '6 Hours' },
+    { value: 86400, label: '24 Hours' },
   ];
 
   const addVoterSecret = () => {
@@ -44,7 +42,6 @@ export function CreateProposal() {
     setVoterSecrets(voterSecrets.filter(s => s !== secret));
   };
 
-  // Compute mock merkle root (deterministic based on secrets)
   const computedRoot = useMemo(() => {
     if (voterSecrets.length === 0) return null;
     return `0x${hashSecrets(voterSecrets)}`;
@@ -59,88 +56,102 @@ export function CreateProposal() {
     setError(null);
     setIsSubmitting(true);
 
-    // DEMO MODE: Simulates transaction - not yet connected to Solana program
-    // TODO: Replace with actual createProposal transaction when program is deployed
     await new Promise(r => setTimeout(r, 2000));
 
-    // Redirect to the new proposal (demo ID)
     const newId = 5;
     navigate(`/proposal/${newId}${location.search}`);
   };
 
   return (
-    <div className="create-proposal">
-      <div className="demo-banner" role="alert">
-        Demo Mode - Proposal creation simulated (not submitted to chain)
+    <div className="about-page">
+      <h1>Create Proposal</h1>
+
+      <div className="warning-box" style={{ marginBottom: 'var(--space-6)' }}>
+        <span className="warning-icon">!</span>
+        <span>Demo Mode - Proposal creation simulated (not submitted to chain)</span>
       </div>
-      <TerminalCard title="CREATE::NEW_PROPOSAL">
-        <div className="form-section">
-          <div className="input-group">
-            <label className="input-label">
-              <span className="label-icon">&gt;</span>
-              TITLE
-            </label>
-            <input
-              type="text"
-              className="input-field"
-              placeholder="Enter proposal title..."
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              disabled={isSubmitting}
-            />
-          </div>
 
-          <div className="input-group">
-            <label className="input-label">
-              <span className="label-icon">&gt;</span>
-              DESCRIPTION
-            </label>
-            <textarea
-              className="input-field textarea"
-              placeholder="Describe the proposal..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={4}
-              disabled={isSubmitting}
-            />
-          </div>
+      <h2>Proposal Details</h2>
 
-          <div className="input-group">
-            <label className="input-label">
-              <span className="label-icon">&gt;</span>
-              VOTING_DURATION
-            </label>
-            <div className="duration-options">
-              {durationOptions.map(opt => (
-                <button
-                  key={opt.value}
-                  className={`duration-btn ${duration === opt.value ? 'selected' : ''}`}
-                  onClick={() => setDuration(opt.value)}
-                  disabled={isSubmitting}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+      <div className="guarantee-card">
+        <div className="input-group" style={{ marginBottom: 'var(--space-4)' }}>
+          <label className="input-label">Title</label>
+          <input
+            type="text"
+            className="input-field"
+            placeholder="Enter proposal title..."
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            disabled={isSubmitting}
+          />
+        </div>
+
+        <div className="input-group" style={{ marginBottom: 'var(--space-4)' }}>
+          <label className="input-label">Description</label>
+          <textarea
+            className="input-field"
+            placeholder="Describe the proposal..."
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={4}
+            disabled={isSubmitting}
+            style={{ resize: 'vertical', minHeight: '100px' }}
+          />
+        </div>
+
+        <div className="input-group">
+          <label className="input-label">Voting Duration</label>
+          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+            {durationOptions.map(opt => (
+              <button
+                key={opt.value}
+                className={`action-btn ${duration === opt.value ? '' : 'secondary'}`}
+                onClick={() => setDuration(opt.value)}
+                disabled={isSubmitting}
+                style={{ flex: 1 }}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
         </div>
-      </TerminalCard>
+      </div>
 
-      <TerminalCard title="VOTER::WHITELIST">
-        <p className="section-hint">
+      <h2>Voter Whitelist</h2>
+
+      <div className="guarantee-card">
+        <p className="guarantee-desc" style={{ marginBottom: 'var(--space-4)' }}>
           Add voter secrets to allow them to participate. Each voter needs a unique secret.
         </p>
 
-        <div className="voter-list">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
           {voterSecrets.map((secret, i) => (
-            <div key={secret} className="voter-item">
-              <span className="voter-index">{String(i + 1).padStart(2, '0')}</span>
-              <span className="voter-secret">{secret}</span>
+            <div
+              key={secret}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--space-3)',
+                padding: 'var(--space-2) var(--space-3)',
+                background: 'var(--bg-input)',
+                borderRadius: 'var(--radius-sm)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 'var(--text-sm)',
+              }}
+            >
+              <span style={{ color: 'var(--text-muted)' }}>{String(i + 1).padStart(2, '0')}</span>
+              <span style={{ flex: 1, color: 'var(--text-secondary)' }}>{secret}</span>
               <button
-                className="voter-remove"
                 onClick={() => removeVoterSecret(secret)}
                 disabled={isSubmitting}
-                aria-label={`Remove voter ${i + 1}`}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  fontSize: 'var(--text-lg)',
+                  padding: '0 var(--space-1)',
+                }}
               >
                 ×
               </button>
@@ -148,7 +159,7 @@ export function CreateProposal() {
           ))}
         </div>
 
-        <div className="add-voter">
+        <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
           <input
             type="text"
             className="input-field"
@@ -157,46 +168,49 @@ export function CreateProposal() {
             onChange={(e) => setNewSecret(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && addVoterSecret()}
             disabled={isSubmitting}
+            style={{ flex: 1 }}
           />
           <button
-            className="add-btn"
+            className="action-btn"
             onClick={addVoterSecret}
             disabled={isSubmitting || !newSecret}
           >
-            + ADD
+            Add
           </button>
         </div>
 
         {computedRoot && (
-          <div className="merkle-root">
-            <span className="root-label">COMPUTED MERKLE ROOT:</span>
-            <span className="root-value">{computedRoot.slice(0, 20)}...</span>
+          <div style={{ marginTop: 'var(--space-4)', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>
+            <span style={{ color: 'var(--text-muted)' }}>Merkle Root: </span>
+            <span style={{ color: 'var(--text-secondary)' }}>{computedRoot.slice(0, 20)}...</span>
           </div>
         )}
-      </TerminalCard>
+      </div>
 
-      <TerminalCard title="SUBMIT::PREVIEW">
-        <div className="preview">
-          <div className="preview-row">
-            <span className="preview-label">Title</span>
-            <span className="preview-value">{title || '—'}</span>
+      <h2>Preview</h2>
+
+      <div className="guarantee-card">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>
+            <span style={{ color: 'var(--text-muted)' }}>Title</span>
+            <span style={{ color: 'var(--text-secondary)' }}>{title || '—'}</span>
           </div>
-          <div className="preview-row">
-            <span className="preview-label">Duration</span>
-            <span className="preview-value">
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>
+            <span style={{ color: 'var(--text-muted)' }}>Duration</span>
+            <span style={{ color: 'var(--text-secondary)' }}>
               {durationOptions.find(d => d.value === duration)?.label}
             </span>
           </div>
-          <div className="preview-row">
-            <span className="preview-label">Eligible Voters</span>
-            <span className="preview-value">{voterSecrets.length}</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>
+            <span style={{ color: 'var(--text-muted)' }}>Eligible Voters</span>
+            <span style={{ color: 'var(--text-secondary)' }}>{voterSecrets.length}</span>
           </div>
         </div>
 
         {error && (
-          <div className="error-message">
-            <span className="error-icon">!</span>
-            {error}
+          <div className="result-box error" style={{ marginBottom: 'var(--space-4)' }}>
+            <span className="result-icon">!</span>
+            <span>{error}</span>
           </div>
         )}
 
@@ -205,16 +219,9 @@ export function CreateProposal() {
           onClick={handleSubmit}
           disabled={isSubmitting || !title || !description || voterSecrets.length === 0}
         >
-          {isSubmitting ? (
-            <>
-              <span className="loading-spinner" />
-              CREATING ON SOLANA...
-            </>
-          ) : (
-            'CREATE PROPOSAL ON SOLANA'
-          )}
+          {isSubmitting ? 'Creating on Solana...' : 'Create Proposal'}
         </button>
-      </TerminalCard>
+      </div>
     </div>
   );
 }

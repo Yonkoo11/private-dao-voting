@@ -25,21 +25,20 @@ export function Header() {
   const queryString = location.search;
 
   const isActive = (path: string) => {
-    if (path === '/') return location.pathname === '/';
     return location.pathname.startsWith(path);
   };
 
   return (
     <header className="header">
-      <Link to={`/${queryString}`} className="header-logo">
+      <Link to={`/dashboard${queryString}`} className="header-logo">
         <ShieldLogo />
         <span className="header-logo-text">Private DAO</span>
       </Link>
 
       <nav className="header-nav">
         <Link
-          to={`/${queryString}`}
-          className={isActive('/') && location.pathname === '/' ? 'active' : ''}
+          to={`/dashboard${queryString}`}
+          className={isActive('/dashboard') ? 'active' : ''}
         >
           Proposals
         </Link>

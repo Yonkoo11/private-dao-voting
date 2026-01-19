@@ -130,6 +130,7 @@ export function ProposalView() {
     return (
       <div className="proposal-view">
         <div className="loading-state">
+          <div className="loading-spinner" />
           <span>Loading proposal...</span>
         </div>
       </div>
@@ -139,7 +140,7 @@ export function ProposalView() {
   if (!proposal) {
     return (
       <div className="proposal-view">
-        <Link to={`/${location.search}`} className="back-link">
+        <Link to={`/dashboard${location.search}`} className="back-link">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
             <path d="M19 12H5m7-7-7 7 7 7" />
           </svg>
@@ -284,9 +285,176 @@ export function ProposalView() {
     }
   };
 
+  // Voting Section Component
+  const VotingSection = () => (
+    <div className="voting-section">
+      {/* Privacy Indicator */}
+      <div className="privacy-indicator">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        </svg>
+        Your vote is verified but never revealed.
+      </div>
+
+      <h3 className="voting-section-title">Cast Your Vote</h3>
+
+      {/* Step indicator */}
+      <div className="wizard-steps">
+        <div className={`wizard-step ${getWizardStepNumber() >= 1 ? 'completed' : ''} ${getWizardStepNumber() === 1 ? 'active' : ''}`} />
+        <div className={`wizard-step ${getWizardStepNumber() >= 2 ? 'completed' : ''} ${getWizardStepNumber() === 2 ? 'active' : ''}`} />
+        <div className={`wizard-step ${getWizardStepNumber() >= 3 ? 'completed' : ''} ${getWizardStepNumber() === 3 ? 'active' : ''}`} />
+        <div className={`wizard-step ${getWizardStepNumber() >= 4 ? 'completed' : ''}`} />
+      </div>
+
+      {/* Step 1: Secret Entry */}
+      {wizardStep === 'secret' && (
+        <div className="wizard-content">
+          <div className="form-group">
+            <label className="form-label">Voter Secret</label>
+            <input
+              type="password"
+              className="form-input"
+              placeholder="Enter your secret key..."
+              value={voterSecret}
+              onChange={(e) => setVoterSecret(e.target.value)}
+              autoFocus
+            />
+            <span className="form-hint">
+              Your secret proves eligibility without revealing identity
+            </span>
+          </div>
+
+          <button
+            className="submit-btn"
+            onClick={handleContinueToVote}
+            disabled={!voterSecret}
+          >
+            Continue
+          </button>
+        </div>
+      )}
+
+      {/* Step 2: Vote Selection */}
+      {wizardStep === 'vote' && (
+        <div className="wizard-content">
+          <div className="vote-options" role="group" aria-label="Vote options">
+            <button
+              className={`vote-option approve ${selectedVote === 1 ? 'selected' : ''}`}
+              onClick={() => setSelectedVote(1)}
+              aria-pressed={selectedVote === 1}
+            >
+              <span className="vote-option-label">YES</span>
+            </button>
+            <button
+              className={`vote-option reject ${selectedVote === 0 ? 'selected' : ''}`}
+              onClick={() => setSelectedVote(0)}
+              aria-pressed={selectedVote === 0}
+            >
+              <span className="vote-option-label">NO</span>
+            </button>
+          </div>
+
+          <button
+            className="submit-btn"
+            onClick={handleSubmitVote}
+            disabled={selectedVote === null}
+          >
+            Generate Proof & Submit
+          </button>
+        </div>
+      )}
+
+      {/* Step 3: Proof Generation */}
+      {wizardStep === 'proof' && (
+        <div className="wizard-content">
+          <div className="proof-generation">
+            <h4 className="proof-generation-title">Generating ZK Proof</h4>
+            <p className="proof-generation-subtitle">Your identity stays hidden</p>
+
+            <div className="proof-progress-wrapper">
+              <div className="proof-progress-bar">
+                <div
+                  className="proof-progress-fill"
+                  style={{ width: `${proofState.progress}%` }}
+                />
+              </div>
+              <span className="proof-progress-text">{proofState.progress}%</span>
+            </div>
+
+            <p className="proof-stage">{proofState.message}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Step 4: Success */}
+      {wizardStep === 'success' && (
+        <div className="wizard-content">
+          <div className="success-state">
+            <h3 className="success-title">Vote Recorded</h3>
+
+            {proofState.proofDetails && (
+              <div className="proof-details">
+                <div className="proof-detail-row">
+                  <span className="proof-detail-label">Vote</span>
+                  <span className="proof-detail-value">
+                    {selectedVote === 1 ? 'YES' : 'NO'}
+                  </span>
+                </div>
+                <div className="proof-detail-row">
+                  <span className="proof-detail-label">Proof hash</span>
+                  <span className="proof-detail-value">
+                    {proofState.proofDetails.nullifier.slice(0, 16)}...
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+              <a
+                href={getExplorerUrl(proofState.txSignature!)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="explorer-link"
+              >
+                View on Explorer
+              </a>
+              <Link to={`/dashboard${location.search}`} className="explorer-link">
+                Back to Proposals
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="error-message">
+          <svg viewBox="0 0 16 16" fill="currentColor" width="16" height="16">
+            <path d="M8 1a7 7 0 100 14A7 7 0 008 1zM7.25 4.5a.75.75 0 011.5 0v4a.75.75 0 01-1.5 0v-4zm.75 7.5a1 1 0 100-2 1 1 0 000 2z" />
+          </svg>
+          {error}
+        </div>
+      )}
+    </div>
+  );
+
+  // Results Section Component
+  const ResultsSection = () => (
+    <div className="results-section">
+      <h3 className="results-title">Final Results</h3>
+      <div className={`result-verdict ${yesPercent >= 50 ? 'approved' : 'rejected'}`}>
+        {yesPercent >= 50 ? 'Approved' : 'Rejected'}
+      </div>
+      <div className="result-summary">
+        <span>Total votes: {totalVotes}</span>
+        <span>Approval: {yesPercent}%</span>
+        <span>{proposal.isFinalized ? 'Finalized on-chain' : 'Awaiting finalization'}</span>
+      </div>
+    </div>
+  );
+
   return (
     <div className="proposal-view">
-      <Link to={`/${location.search}`} className="back-link">
+      <Link to={`/dashboard${location.search}`} className="back-link">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
           <path d="M19 12H5m7-7-7 7 7 7" />
         </svg>
@@ -330,192 +498,10 @@ export function ProposalView() {
       </div>
 
       {/* Voting Wizard - Only show if active */}
-      {isActive && (
-        <div className="voting-section">
-          <h3 className="voting-section-title">Cast Your Vote</h3>
-
-          {/* Step indicator */}
-          <div className="wizard-steps">
-            <div className={`wizard-step ${getWizardStepNumber() >= 1 ? 'completed' : ''} ${getWizardStepNumber() === 1 ? 'active' : ''}`} />
-            <div className={`wizard-step ${getWizardStepNumber() >= 2 ? 'completed' : ''} ${getWizardStepNumber() === 2 ? 'active' : ''}`} />
-            <div className={`wizard-step ${getWizardStepNumber() >= 3 ? 'completed' : ''} ${getWizardStepNumber() === 3 ? 'active' : ''}`} />
-            <div className={`wizard-step ${getWizardStepNumber() >= 4 ? 'completed' : ''}`} />
-          </div>
-
-          {/* Step 1: Secret Entry */}
-          {wizardStep === 'secret' && (
-            <div className="wizard-content">
-              <div className="form-group">
-                <label className="form-label">Voter Secret</label>
-                <input
-                  type="password"
-                  className="form-input"
-                  placeholder="Enter your secret key..."
-                  value={voterSecret}
-                  onChange={(e) => setVoterSecret(e.target.value)}
-                  autoFocus
-                />
-                <span className="form-hint">
-                  Your secret proves eligibility without revealing identity
-                </span>
-              </div>
-
-              <button
-                className="submit-btn"
-                onClick={handleContinueToVote}
-                disabled={!voterSecret}
-              >
-                Continue
-              </button>
-            </div>
-          )}
-
-          {/* Step 2: Vote Selection */}
-          {wizardStep === 'vote' && (
-            <div className="wizard-content">
-              <div className="vote-options" role="group" aria-label="Vote options">
-                <button
-                  className={`vote-option approve ${selectedVote === 1 ? 'selected' : ''}`}
-                  onClick={() => setSelectedVote(1)}
-                  aria-pressed={selectedVote === 1}
-                >
-                  <span className="vote-option-icon">
-                    <svg viewBox="0 0 16 16" fill="currentColor" width="20" height="20">
-                      <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z" />
-                    </svg>
-                  </span>
-                  <span className="vote-option-label">Approve</span>
-                </button>
-                <button
-                  className={`vote-option reject ${selectedVote === 0 ? 'selected' : ''}`}
-                  onClick={() => setSelectedVote(0)}
-                  aria-pressed={selectedVote === 0}
-                >
-                  <span className="vote-option-icon">
-                    <svg viewBox="0 0 16 16" fill="currentColor" width="20" height="20">
-                      <path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.75.75 0 111.06 1.06L9.06 8l3.22 3.22a.75.75 0 11-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 01-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z" />
-                    </svg>
-                  </span>
-                  <span className="vote-option-label">Reject</span>
-                </button>
-              </div>
-
-              <p className="form-hint" style={{ textAlign: 'center', marginBottom: 'var(--space-4)' }}>
-                Your vote is private and cannot be traced back to you
-              </p>
-
-              <button
-                className="submit-btn"
-                onClick={handleSubmitVote}
-                disabled={selectedVote === null}
-              >
-                Submit Vote
-              </button>
-            </div>
-          )}
-
-          {/* Step 3: Proof Generation */}
-          {wizardStep === 'proof' && (
-            <div className="wizard-content">
-              <div className="proof-generation">
-                <h4 className="proof-generation-title">Generating ZK Proof</h4>
-                <p className="proof-generation-subtitle">Your identity stays hidden</p>
-
-                <div className="proof-progress-wrapper">
-                  <div className="proof-progress-bar">
-                    <div
-                      className="proof-progress-fill"
-                      style={{ width: `${proofState.progress}%` }}
-                    />
-                  </div>
-                  <span className="proof-progress-text">{proofState.progress}%</span>
-                </div>
-
-                <p className="proof-stage">{proofState.message}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Step 4: Success */}
-          {wizardStep === 'success' && (
-            <div className="wizard-content">
-              <div className="success-state">
-                <div className="success-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="32" height="32">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                </div>
-                <h3 className="success-title">Vote Recorded</h3>
-                <p className="success-desc">
-                  Your anonymous vote has been verified and recorded on Solana.
-                </p>
-
-                {proofState.proofDetails && (
-                  <div className="proof-details">
-                    <h4 className="proof-details-title">Zero-Knowledge Proof</h4>
-                    <div className="proof-detail-row">
-                      <span className="proof-detail-label">Nullifier</span>
-                      <code className="proof-detail-value">
-                        {proofState.proofDetails.nullifier.slice(0, 16)}...
-                      </code>
-                    </div>
-                    <div className="proof-detail-row">
-                      <span className="proof-detail-label">Proof Size</span>
-                      <code className="proof-detail-value">
-                        {Math.round(proofState.proofDetails.proofHex.length / 2)} bytes
-                      </code>
-                    </div>
-                    <div className="proof-detail-row">
-                      <span className="proof-detail-label">Gen Time</span>
-                      <code className="proof-detail-value">
-                        {(proofState.proofDetails.timingMs / 1000).toFixed(2)}s
-                      </code>
-                    </div>
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'center' }}>
-                  <a
-                    href={getExplorerUrl(proofState.txSignature!)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="explorer-link"
-                  >
-                    View on Explorer
-                  </a>
-                  <Link to={`/${location.search}`} className="explorer-link">
-                    Back to Proposals
-                  </Link>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {error && (
-            <div className="error-message">
-              <svg viewBox="0 0 16 16" fill="currentColor" width="16" height="16">
-                <path d="M8 1a7 7 0 100 14A7 7 0 008 1zM7.25 4.5a.75.75 0 011.5 0v4a.75.75 0 01-1.5 0v-4zm.75 7.5a1 1 0 100-2 1 1 0 000 2z" />
-              </svg>
-              {error}
-            </div>
-          )}
-        </div>
-      )}
+      {isActive && <VotingSection />}
 
       {/* Results for ended/finalized */}
-      {(isEnded || proposal.isFinalized) && (
-        <div className="results-section">
-          <h3 className="results-title">Final Results</h3>
-          <div className={`result-verdict ${yesPercent >= 50 ? 'approved' : 'rejected'}`}>
-            {yesPercent >= 50 ? 'Approved' : 'Rejected'}
-          </div>
-          <div className="result-summary">
-            <span>Total votes: {totalVotes}</span>
-            <span>Approval: {yesPercent}%</span>
-            <span>{proposal.isFinalized ? 'Finalized on-chain' : 'Awaiting finalization'}</span>
-          </div>
-        </div>
-      )}
+      {(isEnded || proposal.isFinalized) && <ResultsSection />}
 
       {/* On-Chain Data */}
       <div className="chain-section">
