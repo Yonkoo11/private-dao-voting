@@ -22,12 +22,12 @@ function formatTimeRemaining(timestamp: number): string {
 
   if (hours > 24) {
     const days = Math.floor(hours / 24);
-    return `${days}d ${hours % 24}h remaining`;
+    return `${days}d ${hours % 24}h left`;
   }
-  return `${hours}h ${mins}m remaining`;
+  return `${hours}h ${mins}m left`;
 }
 
-export function ProposalCard({ proposal, compact = false, index = 0 }: ProposalCardProps) {
+export function ProposalCard({ proposal, compact = false }: ProposalCardProps) {
   const location = useLocation();
   const status = getProposalStatus(proposal);
   const totalVotes = proposal.yesVotes + proposal.noVotes;
@@ -39,18 +39,10 @@ export function ProposalCard({ proposal, compact = false, index = 0 }: ProposalC
     finalized: 'Final',
   };
 
-  // Stagger animation and offset based on index
-  const cardStyle = {
-    '--card-index': index,
-    animationDelay: `${index * 100}ms`,
-  } as React.CSSProperties;
-
   return (
     <Link
       to={`/proposal/${proposal.id}${location.search}`}
       className={`proposal-card-link status-${status}`}
-      style={cardStyle}
-      data-index={index}
     >
       <article className={`proposal-card ${compact ? 'compact' : ''}`}>
         <div className="proposal-card-header">
@@ -64,8 +56,8 @@ export function ProposalCard({ proposal, compact = false, index = 0 }: ProposalC
 
         {!compact && (
           <p className="proposal-card-description">
-            {proposal.description.length > 120
-              ? proposal.description.slice(0, 120) + '...'
+            {proposal.description.length > 100
+              ? proposal.description.slice(0, 100) + '...'
               : proposal.description}
           </p>
         )}
@@ -89,7 +81,7 @@ export function ProposalCard({ proposal, compact = false, index = 0 }: ProposalC
               {formatTimeRemaining(proposal.votingEndsAt)}
             </span>
           ) : (
-            <span className="total-votes">{totalVotes} votes cast</span>
+            <span className="total-votes">{totalVotes} votes</span>
           )}
         </div>
       </article>

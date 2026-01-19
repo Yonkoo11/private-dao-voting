@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useParams, Link, useLocation } from 'react-router-dom';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { ProofProgress } from '../components/shared';
 import { PROGRAM_ID } from '../lib/constants';
 import { generateVoteProof } from '../services/proofService';
 import {
@@ -67,6 +66,8 @@ function getDemoProposals(): Record<number, Proposal> {
   };
 }
 
+type WizardStep = 'secret' | 'vote' | 'proof' | 'success';
+
 export function ProposalView() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
@@ -77,6 +78,7 @@ export function ProposalView() {
   const [loading, setLoading] = useState(true);
   const [voterSecret, setVoterSecret] = useState('');
   const [selectedVote, setSelectedVote] = useState<0 | 1 | null>(null);
+  const [wizardStep, setWizardStep] = useState<WizardStep>('secret');
   const [proofState, setProofState] = useState<ProofState>({
     stage: 'idle',
     message: '',
@@ -128,7 +130,7 @@ export function ProposalView() {
     return (
       <div className="proposal-view">
         <div className="loading-state">
-          <span>Fetching proposal #{id} from Solana...</span>
+          <span>Loading proposal...</span>
         </div>
       </div>
     );
@@ -161,12 +163,25 @@ export function ProposalView() {
     if (diff <= 0) return 'Voting ended';
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    return `${hours}h ${mins}m remaining`;
+    if (hours > 24) {
+      const days = Math.floor(hours / 24);
+      return `${days}d ${hours % 24}h left`;
+    }
+    return `${hours}h ${mins}m left`;
+  };
+
+  const handleContinueToVote = () => {
+    if (!voterSecret) {
+      setError('Please enter your voter secret');
+      return;
+    }
+    setError(null);
+    setWizardStep('vote');
   };
 
   const handleSubmitVote = async () => {
-    if (!voterSecret || selectedVote === null) {
-      setError('Please enter your voter secret and select a vote');
+    if (selectedVote === null) {
+      setError('Please select a vote');
       return;
     }
 
@@ -176,6 +191,7 @@ export function ProposalView() {
     }
 
     setError(null);
+    setWizardStep('proof');
 
     try {
       // Stage 1: Generate the ZK proof
@@ -240,6 +256,8 @@ export function ProposalView() {
         },
       });
 
+      setWizardStep('success');
+
       // Refresh proposal data
       const updatedProposal = await fetchProposal(proposal.id);
       if (updatedProposal) {
@@ -247,6 +265,7 @@ export function ProposalView() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Vote failed');
+      setWizardStep('vote');
       setProofState({
         stage: 'idle',
         message: '',
@@ -255,12 +274,20 @@ export function ProposalView() {
     }
   };
 
-  const isVoting = proofState.stage !== 'idle' && !proofState.txSignature;
+  const getWizardStepNumber = (): number => {
+    switch (wizardStep) {
+      case 'secret': return 1;
+      case 'vote': return 2;
+      case 'proof': return 3;
+      case 'success': return 4;
+      default: return 1;
+    }
+  };
 
   return (
     <div className="proposal-view">
-      <Link to={`/${location.search}`} className="back-link" aria-label="Back to proposals list">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16" aria-hidden="true">
+      <Link to={`/${location.search}`} className="back-link">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
           <path d="M19 12H5m7-7-7 7 7 7" />
         </svg>
         Back to proposals
@@ -294,21 +321,30 @@ export function ProposalView() {
         </div>
         <div className="vote-counts">
           <span className="vote-count-item yes">
-            <span className="vote-count-value">{proposal.yesVotes}</span> {proposal.yesVotes === 1 ? 'vote' : 'votes'} ({yesPercent}%)
+            <span className="vote-count-value">{proposal.yesVotes}</span> votes ({yesPercent}%)
           </span>
           <span className="vote-count-item no">
-            <span className="vote-count-value">{proposal.noVotes}</span> {proposal.noVotes === 1 ? 'vote' : 'votes'} ({100 - yesPercent}%)
+            <span className="vote-count-value">{proposal.noVotes}</span> votes ({100 - yesPercent}%)
           </span>
         </div>
       </div>
 
-      {/* Voting Interface - Only show if active */}
+      {/* Voting Wizard - Only show if active */}
       {isActive && (
         <div className="voting-section">
           <h3 className="voting-section-title">Cast Your Vote</h3>
 
-          {!proofState.txSignature ? (
-            <>
+          {/* Step indicator */}
+          <div className="wizard-steps">
+            <div className={`wizard-step ${getWizardStepNumber() >= 1 ? 'completed' : ''} ${getWizardStepNumber() === 1 ? 'active' : ''}`} />
+            <div className={`wizard-step ${getWizardStepNumber() >= 2 ? 'completed' : ''} ${getWizardStepNumber() === 2 ? 'active' : ''}`} />
+            <div className={`wizard-step ${getWizardStepNumber() >= 3 ? 'completed' : ''} ${getWizardStepNumber() === 3 ? 'active' : ''}`} />
+            <div className={`wizard-step ${getWizardStepNumber() >= 4 ? 'completed' : ''}`} />
+          </div>
+
+          {/* Step 1: Secret Entry */}
+          {wizardStep === 'secret' && (
+            <div className="wizard-content">
               <div className="form-group">
                 <label className="form-label">Voter Secret</label>
                 <input
@@ -317,22 +353,33 @@ export function ProposalView() {
                   placeholder="Enter your secret key..."
                   value={voterSecret}
                   onChange={(e) => setVoterSecret(e.target.value)}
-                  disabled={isVoting}
+                  autoFocus
                 />
                 <span className="form-hint">
                   Your secret proves eligibility without revealing identity
                 </span>
               </div>
 
+              <button
+                className="submit-btn"
+                onClick={handleContinueToVote}
+                disabled={!voterSecret}
+              >
+                Continue
+              </button>
+            </div>
+          )}
+
+          {/* Step 2: Vote Selection */}
+          {wizardStep === 'vote' && (
+            <div className="wizard-content">
               <div className="vote-options" role="group" aria-label="Vote options">
                 <button
                   className={`vote-option approve ${selectedVote === 1 ? 'selected' : ''}`}
                   onClick={() => setSelectedVote(1)}
-                  disabled={isVoting}
-                  aria-label="Vote to approve this proposal"
                   aria-pressed={selectedVote === 1}
                 >
-                  <span className="vote-option-icon" aria-hidden="true">
+                  <span className="vote-option-icon">
                     <svg viewBox="0 0 16 16" fill="currentColor" width="20" height="20">
                       <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z" />
                     </svg>
@@ -342,11 +389,9 @@ export function ProposalView() {
                 <button
                   className={`vote-option reject ${selectedVote === 0 ? 'selected' : ''}`}
                   onClick={() => setSelectedVote(0)}
-                  disabled={isVoting}
-                  aria-label="Vote to reject this proposal"
                   aria-pressed={selectedVote === 0}
                 >
-                  <span className="vote-option-icon" aria-hidden="true">
+                  <span className="vote-option-icon">
                     <svg viewBox="0 0 16 16" fill="currentColor" width="20" height="20">
                       <path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.75.75 0 111.06 1.06L9.06 8l3.22 3.22a.75.75 0 11-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 01-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z" />
                     </svg>
@@ -355,79 +400,103 @@ export function ProposalView() {
                 </button>
               </div>
 
-              {isVoting ? (
-                <ProofProgress state={proofState} />
-              ) : (
-                <button
-                  className="submit-btn"
-                  onClick={handleSubmitVote}
-                  disabled={!voterSecret || selectedVote === null}
-                >
-                  Submit Vote
-                </button>
-              )}
-
-              {error && (
-                <div className="error-message">
-                  <svg viewBox="0 0 16 16" fill="currentColor" width="16" height="16">
-                    <path d="M8 1a7 7 0 100 14A7 7 0 008 1zM7.25 4.5a.75.75 0 011.5 0v4a.75.75 0 01-1.5 0v-4zm.75 7.5a1 1 0 100-2 1 1 0 000 2z" />
-                  </svg>
-                  {error}
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="success-state">
-              <div className="success-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="48" height="48">
-                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                  <polyline points="22 4 12 14.01 9 11.01" />
-                </svg>
-              </div>
-              <h3 className="success-title">Vote Recorded</h3>
-              <p className="success-desc">
-                Your anonymous vote has been cryptographically verified and recorded on Solana.
+              <p className="form-hint" style={{ textAlign: 'center', marginBottom: 'var(--space-4)' }}>
+                Your vote is private and cannot be traced back to you
               </p>
 
-              {/* Proof Details */}
-              {proofState.proofDetails && (
-                <div className="proof-details">
-                  <h4 className="proof-details-title">Zero-Knowledge Proof</h4>
-                  <div className="proof-detail-row">
-                    <span className="proof-detail-label">Nullifier</span>
-                    <code className="proof-detail-value">
-                      {proofState.proofDetails.nullifier.slice(0, 20)}...
-                    </code>
-                  </div>
-                  <div className="proof-detail-row">
-                    <span className="proof-detail-label">Voters Root</span>
-                    <code className="proof-detail-value">
-                      {proofState.proofDetails.votersRoot.slice(0, 20)}...
-                    </code>
-                  </div>
-                  <div className="proof-detail-row">
-                    <span className="proof-detail-label">Proof Size</span>
-                    <code className="proof-detail-value">
-                      {Math.round(proofState.proofDetails.proofHex.length / 2)} bytes
-                    </code>
-                  </div>
-                  <div className="proof-detail-row">
-                    <span className="proof-detail-label">Gen Time</span>
-                    <code className="proof-detail-value">
-                      {(proofState.proofDetails.timingMs / 1000).toFixed(2)}s
-                    </code>
-                  </div>
-                </div>
-              )}
-
-              <a
-                href={getExplorerUrl(proofState.txSignature!)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="explorer-link"
+              <button
+                className="submit-btn"
+                onClick={handleSubmitVote}
+                disabled={selectedVote === null}
               >
-                View on Explorer
-              </a>
+                Submit Vote
+              </button>
+            </div>
+          )}
+
+          {/* Step 3: Proof Generation */}
+          {wizardStep === 'proof' && (
+            <div className="wizard-content">
+              <div className="proof-generation">
+                <h4 className="proof-generation-title">Generating ZK Proof</h4>
+                <p className="proof-generation-subtitle">Your identity stays hidden</p>
+
+                <div className="proof-progress-wrapper">
+                  <div className="proof-progress-bar">
+                    <div
+                      className="proof-progress-fill"
+                      style={{ width: `${proofState.progress}%` }}
+                    />
+                  </div>
+                  <span className="proof-progress-text">{proofState.progress}%</span>
+                </div>
+
+                <p className="proof-stage">{proofState.message}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Step 4: Success */}
+          {wizardStep === 'success' && (
+            <div className="wizard-content">
+              <div className="success-state">
+                <div className="success-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="32" height="32">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </div>
+                <h3 className="success-title">Vote Recorded</h3>
+                <p className="success-desc">
+                  Your anonymous vote has been verified and recorded on Solana.
+                </p>
+
+                {proofState.proofDetails && (
+                  <div className="proof-details">
+                    <h4 className="proof-details-title">Zero-Knowledge Proof</h4>
+                    <div className="proof-detail-row">
+                      <span className="proof-detail-label">Nullifier</span>
+                      <code className="proof-detail-value">
+                        {proofState.proofDetails.nullifier.slice(0, 16)}...
+                      </code>
+                    </div>
+                    <div className="proof-detail-row">
+                      <span className="proof-detail-label">Proof Size</span>
+                      <code className="proof-detail-value">
+                        {Math.round(proofState.proofDetails.proofHex.length / 2)} bytes
+                      </code>
+                    </div>
+                    <div className="proof-detail-row">
+                      <span className="proof-detail-label">Gen Time</span>
+                      <code className="proof-detail-value">
+                        {(proofState.proofDetails.timingMs / 1000).toFixed(2)}s
+                      </code>
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'center' }}>
+                  <a
+                    href={getExplorerUrl(proofState.txSignature!)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="explorer-link"
+                  >
+                    View on Explorer
+                  </a>
+                  <Link to={`/${location.search}`} className="explorer-link">
+                    Back to Proposals
+                  </Link>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="error-message">
+              <svg viewBox="0 0 16 16" fill="currentColor" width="16" height="16">
+                <path d="M8 1a7 7 0 100 14A7 7 0 008 1zM7.25 4.5a.75.75 0 011.5 0v4a.75.75 0 01-1.5 0v-4zm.75 7.5a1 1 0 100-2 1 1 0 000 2z" />
+              </svg>
+              {error}
             </div>
           )}
         </div>
@@ -443,7 +512,7 @@ export function ProposalView() {
           <div className="result-summary">
             <span>Total votes: {totalVotes}</span>
             <span>Approval: {yesPercent}%</span>
-            <span>Status: {proposal.isFinalized ? 'Finalized on-chain' : 'Awaiting finalization'}</span>
+            <span>{proposal.isFinalized ? 'Finalized on-chain' : 'Awaiting finalization'}</span>
           </div>
         </div>
       )}

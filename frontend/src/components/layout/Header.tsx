@@ -4,8 +4,8 @@ import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 function ShieldLogo() {
   return (
     <svg
-      width="28"
-      height="28"
+      width="24"
+      height="24"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -58,7 +58,6 @@ export function Header() {
       </nav>
 
       <div className="header-actions">
-        <span className="network-badge">Devnet</span>
         {isAuthority && (
           <span className="authority-badge">Authority</span>
         )}
