@@ -117,12 +117,17 @@ function deserializeProposal(data: Buffer, pubkey: PublicKey): Proposal | null {
     // Skip bump
     // offset += 1;
 
+    // For backwards compatibility, we derive multi-choice fields from legacy yes/no votes
+    // In the future, on-chain proposals will store numOptions and voteCounts directly
     return {
       id: proposalId,
       title,
       description,
       authority,
       votersRoot,
+      numOptions: 2, // Legacy proposals are binary
+      voteCounts: [noVotes, yesVotes], // [Reject, Approve]
+      optionLabels: ['Reject', 'Approve'], // Default binary labels
       yesVotes,
       noVotes,
       votingEndsAt,
@@ -224,11 +229,12 @@ export function buildCastVoteInstruction(
 
 /**
  * Create and send a vote transaction
+ * @param vote - Vote option index (0 to numOptions-1)
  */
 export async function submitVoteTransaction(
   voter: PublicKey,
   proposalId: number,
-  vote: boolean,
+  vote: number, // Changed from boolean to number for multi-choice support
   nullifierBytes: Uint8Array,
   proofBytes: Uint8Array,
   signTransaction: (tx: Transaction) => Promise<Transaction>
@@ -239,7 +245,7 @@ export async function submitVoteTransaction(
   const instruction = buildCastVoteInstruction(
     voter,
     proposalId,
-    vote ? 1 : 0,
+    vote, // Pass vote option index directly
     nullifierBytes,
     proofBytes
   );

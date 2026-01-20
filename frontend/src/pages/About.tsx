@@ -1,4 +1,11 @@
+import { useState } from 'react';
+import { ThresholdEncryptionDemo } from '../components/ThresholdEncryptionDemo';
+import { DelegationDemo } from '../components/DelegationDemo';
+
 export function About() {
+  const [showDemo, setShowDemo] = useState(false);
+  const [showDelegationDemo, setShowDelegationDemo] = useState(false);
+
   return (
     <div className="about-page">
       <h1>How It Works</h1>
@@ -137,6 +144,72 @@ export function About() {
     ├── src/pages/         # App pages
     ├── src/services/      # Chain & proof services
     └── src/lib/           # Utilities`}</pre>
+      </div>
+
+      <h2>Threshold Encryption</h2>
+
+      <div className="threshold-section">
+        <p className="threshold-intro">
+          Vote results are protected with M-of-N threshold encryption. Results remain hidden until
+          a committee of key holders cooperate to decrypt the tally.
+        </p>
+
+        <div className="threshold-features">
+          <div className="threshold-feature">
+            <h4>Result Privacy</h4>
+            <p>Individual votes and running totals stay encrypted during voting</p>
+          </div>
+          <div className="threshold-feature">
+            <h4>Decentralized Control</h4>
+            <p>No single party can reveal results—requires M of N committee members</p>
+          </div>
+          <div className="threshold-feature">
+            <h4>Verifiable Decryption</h4>
+            <p>Committee members' participation is publicly verifiable on-chain</p>
+          </div>
+        </div>
+
+        <button
+          className="demo-toggle-btn"
+          onClick={() => setShowDemo(!showDemo)}
+        >
+          {showDemo ? 'Hide Demo' : 'Try Interactive Demo'}
+        </button>
+
+        {showDemo && <ThresholdEncryptionDemo />}
+      </div>
+
+      <h2>Vote Delegation</h2>
+
+      <div className="threshold-section">
+        <p className="threshold-intro">
+          Delegate your voting power to trusted representatives. Useful when you can't
+          participate directly but want your voice represented in governance decisions.
+        </p>
+
+        <div className="threshold-features">
+          <div className="threshold-feature">
+            <h4>Flexible Delegation</h4>
+            <p>Delegate globally or per specific proposal</p>
+          </div>
+          <div className="threshold-feature">
+            <h4>Weighted Votes</h4>
+            <p>Delegates accumulate voting power from multiple delegators</p>
+          </div>
+          <div className="threshold-feature">
+            <h4>Revocable Anytime</h4>
+            <p>Cancel delegation before the delegate casts your vote</p>
+          </div>
+        </div>
+
+        <button
+          className="demo-toggle-btn"
+          onClick={() => setShowDelegationDemo(!showDelegationDemo)}
+        >
+          {showDelegationDemo ? 'Hide Demo' : 'Try Delegation Demo'}
+        </button>
+
+        {showDelegationDemo && <DelegationDemo />}
       </div>
 
       <h2>Links</h2>

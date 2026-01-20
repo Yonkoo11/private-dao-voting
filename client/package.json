@@ -3,20 +3,24 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "generate-proof": "node --loader ts-node/esm src/generate-proof.ts",
-    "cast-vote": "node --loader ts-node/esm src/cast-vote.ts",
-    "create-proposal": "node --loader ts-node/esm src/create-proposal.ts"
+    "generate-proof": "npx tsx src/generate-proof.ts",
+    "cast-vote": "npx tsx src/cast-vote.ts",
+    "create-proposal": "npx tsx src/create-proposal.ts",
+    "register-voter": "npx tsx src/register-voter.ts",
+    "get-merkle-proof": "npx tsx src/get-merkle-proof.ts",
+    "list-voters": "npx tsx src/list-voters.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.0",
     "@solana/web3.js": "^1.95.0",
-    "circomlibjs": "^0.1.7",
-    "bn.js": "^5.2.1"
+    "bn.js": "^5.2.1",
+    "circomlibjs": "^0.1.7"
   },
   "devDependencies": {
     "@types/bn.js": "^5.1.6",
     "@types/node": "^22.0.0",
     "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
     "typescript": "^5.4.0"
   }
 }

@@ -125,10 +125,18 @@ function bigintToBytes32(n: bigint): Uint8Array {
   return bytes;
 }
 
+export interface MerkleProofData {
+  votersRoot: string; // Hex string
+  siblings: string[]; // Array of 20 hex strings
+  pathIndices: number[]; // Array of 20 (0 or 1)
+}
+
 export interface ProofInputs {
   voterSecret: string;
   proposalId: number;
-  vote: boolean; // true = yes, false = no
+  vote: number; // 0 to numOptions-1 (for binary: 0=no, 1=yes)
+  numOptions: number; // Number of vote options (2-8, default 2 for binary)
+  merkleProof?: MerkleProofData; // If provided, use actual proof; otherwise demo mode
 }
 
 export interface ProofResult {
@@ -141,6 +149,7 @@ export interface ProofResult {
       nullifier: string;
       proposalId: string;
       vote: string;
+      numOptions: string;
     };
     nullifierBytes: Uint8Array;
   };
@@ -181,12 +190,37 @@ export async function generateVoteProof(
 
     const secret = secretToField(inputs.voterSecret);
     const proposalId = BigInt(inputs.proposalId);
-    const vote = inputs.vote ? BigInt(1) : BigInt(0);
+    const vote = BigInt(inputs.vote);
+    const numOptions = BigInt(inputs.numOptions || 2); // Default to binary voting
+
+    // Validate vote is within range
+    if (inputs.vote < 0 || inputs.vote >= (inputs.numOptions || 2)) {
+      throw new Error(`Invalid vote: ${inputs.vote}. Must be 0 to ${(inputs.numOptions || 2) - 1}`);
+    }
 
     // Compute cryptographic commitments using real Poseidon
     const leaf = computeLeaf(secret);
     const nullifier = computeNullifier(secret, proposalId);
-    const { root: votersRoot, siblings, pathIndices } = buildMerkleTree(leaf);
+
+    // Use provided merkle proof or build demo tree
+    let votersRoot: bigint;
+    let siblings: bigint[];
+    let pathIndices: number[];
+
+    if (inputs.merkleProof) {
+      // Use actual merkle proof from voter registry
+      votersRoot = BigInt(inputs.merkleProof.votersRoot);
+      siblings = inputs.merkleProof.siblings.map(s => BigInt(s));
+      pathIndices = inputs.merkleProof.pathIndices;
+      console.log('Using actual merkle proof from voter registry');
+    } else {
+      // Demo mode: build tree with single voter at leftmost position
+      const demoTree = buildMerkleTree(leaf);
+      votersRoot = demoTree.root;
+      siblings = demoTree.siblings;
+      pathIndices = demoTree.pathIndices;
+      console.log('Demo mode: using generated merkle tree');
+    }
 
     // Prepare circuit inputs in the format Noir expects
     const circuitInputs = {
@@ -194,6 +228,7 @@ export async function generateVoteProof(
       nullifier: nullifier.toString(),
       proposal_id: proposalId.toString(),
       vote: vote.toString(),
+      num_options: numOptions.toString(),
       secret: secret.toString(),
       path_indices: pathIndices,
       siblings: siblings.map(s => s.toString()),
@@ -247,7 +282,8 @@ export async function generateVoteProof(
           votersRoot: toHex(votersRoot),
           nullifier: toHex(nullifier),
           proposalId: inputs.proposalId.toString(),
-          vote: inputs.vote ? '1' : '0',
+          vote: inputs.vote.toString(),
+          numOptions: (inputs.numOptions || 2).toString(),
         },
         nullifierBytes: bigintToBytes32(nullifier),
       },

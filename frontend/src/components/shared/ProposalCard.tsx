@@ -34,8 +34,23 @@ function formatShortId(id: number): string {
 export function ProposalCard({ proposal, compact = false }: ProposalCardProps) {
   const location = useLocation();
   const status = getProposalStatus(proposal);
-  const totalVotes = proposal.yesVotes + proposal.noVotes;
-  const yesPercent = totalVotes > 0 ? Math.round((proposal.yesVotes / totalVotes) * 100) : 0;
+
+  // Multi-choice support
+  const voteCounts = proposal.voteCounts || [proposal.noVotes || 0, proposal.yesVotes || 0];
+  const totalVotes = voteCounts.reduce((sum, count) => sum + count, 0);
+  const isBinaryVote = (proposal.numOptions || 2) === 2;
+
+  // For binary votes, show approval percentage
+  const yesPercent = isBinaryVote && totalVotes > 0
+    ? Math.round((voteCounts[1] / totalVotes) * 100)
+    : 0;
+
+  // For multi-choice, find the leading option
+  const leadingIndex = voteCounts.indexOf(Math.max(...voteCounts));
+  const leadingLabel = proposal.optionLabels?.[leadingIndex] || (leadingIndex === 1 ? 'YES' : 'NO');
+  const leadingPercent = totalVotes > 0
+    ? Math.round((voteCounts[leadingIndex] / totalVotes) * 100)
+    : 0;
 
   const statusLabels: Record<ProposalStatus, string> = {
     active: 'ACTIVE',
@@ -60,20 +75,45 @@ export function ProposalCard({ proposal, compact = false }: ProposalCardProps) {
             ) : (
               <span className={`status-badge ${status}`}>{statusLabels[status]}</span>
             )}
+            {!isBinaryVote && (
+              <>
+                <span className="landing-stats-divider">·</span>
+                <span className="multi-choice-indicator">{proposal.numOptions} options</span>
+              </>
+            )}
           </div>
 
           {!compact && (
             <div className="proposal-card-stats">
-              <div className="vote-bar">
-                <div
-                  className="vote-bar-yes"
-                  style={{ width: `${yesPercent}%` }}
-                />
-              </div>
-              <div className="vote-counts">
-                <span className="vote-yes">YES {proposal.yesVotes}</span>
-                <span className="vote-no">NO {proposal.noVotes}</span>
-              </div>
+              {isBinaryVote ? (
+                // Binary vote display
+                <>
+                  <div className="vote-bar">
+                    <div
+                      className="vote-bar-yes"
+                      style={{ width: `${yesPercent}%` }}
+                    />
+                  </div>
+                  <div className="vote-counts">
+                    <span className="vote-yes">{proposal.optionLabels?.[1] || 'YES'} {voteCounts[1]}</span>
+                    <span className="vote-no">{proposal.optionLabels?.[0] || 'NO'} {voteCounts[0]}</span>
+                  </div>
+                </>
+              ) : (
+                // Multi-choice display - show leading option
+                <>
+                  <div className="vote-bar">
+                    <div
+                      className="vote-bar-leading"
+                      style={{ width: `${leadingPercent}%` }}
+                    />
+                  </div>
+                  <div className="vote-counts">
+                    <span className="vote-leading">Leading: {leadingLabel} ({leadingPercent}%)</span>
+                    <span className="vote-total">{totalVotes} total votes</span>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

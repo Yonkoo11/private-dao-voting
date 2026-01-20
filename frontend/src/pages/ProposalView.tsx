@@ -3,6 +3,8 @@ import { useParams, Link, useLocation } from 'react-router-dom';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { PROGRAM_ID } from '../lib/constants';
 import { generateVoteProof } from '../services/proofService';
+import type { MerkleProofData } from '../services/proofService';
+import { getMerkleProofForVoter } from '../services/voterService';
 import {
   fetchProposal,
   submitVoteTransaction,
@@ -12,6 +14,7 @@ import {
 import type { Proposal, ProofState } from '../types';
 
 // Demo proposal data (fallback if chain fetch fails)
+// Updated to support multi-choice voting
 function getDemoProposals(): Record<number, Proposal> {
   const now = Date.now();
   return {
@@ -21,6 +24,9 @@ function getDemoProposals(): Record<number, Proposal> {
       description: 'Allocate 1000 SOL from the DAO treasury to the core development fund for protocol improvements and security audits.',
       authority: 'DaoAuth1234...xyz',
       votersRoot: '0x7f3a8b2c9d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a',
+      numOptions: 2,
+      voteCounts: [3, 12], // [Reject, Approve]
+      optionLabels: ['Reject', 'Approve'],
       yesVotes: 12,
       noVotes: 3,
       votingEndsAt: now - 3600000,
@@ -33,6 +39,9 @@ function getDemoProposals(): Record<number, Proposal> {
       description: 'Establish a 500 SOL grant program to fund community-driven development initiatives and educational content.',
       authority: 'DaoAuth1234...xyz',
       votersRoot: '0x7f3a8b2c9d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a',
+      numOptions: 2,
+      voteCounts: [5, 8],
+      optionLabels: ['Reject', 'Approve'],
       yesVotes: 8,
       noVotes: 5,
       votingEndsAt: now - 1800000,
@@ -42,9 +51,12 @@ function getDemoProposals(): Record<number, Proposal> {
     3: {
       id: 3,
       title: 'Protocol Fee Adjustment',
-      description: 'Reduce protocol fees from 0.3% to 0.1% to increase competitiveness and attract more users to the platform.',
+      description: 'Choose the new protocol fee rate to increase competitiveness and attract more users.',
       authority: 'DaoAuth1234...xyz',
       votersRoot: '0x7f3a8b2c9d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a',
+      numOptions: 4,
+      voteCounts: [0, 1, 0, 0],
+      optionLabels: ['Keep 0.3%', 'Reduce to 0.2%', 'Reduce to 0.1%', 'Remove fees'],
       yesVotes: 1,
       noVotes: 0,
       votingEndsAt: now + 3600000,
@@ -57,11 +69,29 @@ function getDemoProposals(): Record<number, Proposal> {
       description: 'Approve the distribution of 10,000 governance tokens to early contributors and active community members.',
       authority: 'DaoAuth1234...xyz',
       votersRoot: '0x7f3a8b2c9d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a',
+      numOptions: 2,
+      voteCounts: [0, 0],
+      optionLabels: ['Reject', 'Approve'],
       yesVotes: 0,
       noVotes: 0,
       votingEndsAt: now + 86400000,
       isFinalized: false,
       createdAt: now - 3600000,
+    },
+    5: {
+      id: 5,
+      title: 'New Logo Design',
+      description: 'Vote for your preferred new logo design from the community submissions.',
+      authority: 'DaoAuth1234...xyz',
+      votersRoot: '0x7f3a8b2c9d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a',
+      numOptions: 5,
+      voteCounts: [2, 5, 3, 1, 4],
+      optionLabels: ['Design A', 'Design B', 'Design C', 'Design D', 'Design E'],
+      yesVotes: 15,
+      noVotes: 0,
+      votingEndsAt: now + 172800000,
+      isFinalized: false,
+      createdAt: now - 7200000,
     },
   };
 }
@@ -77,8 +107,10 @@ export function ProposalView() {
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [loading, setLoading] = useState(true);
   const [voterSecret, setVoterSecret] = useState('');
-  const [selectedVote, setSelectedVote] = useState<0 | 1 | null>(null);
+  const [selectedVote, setSelectedVote] = useState<number | null>(null);
   const [wizardStep, setWizardStep] = useState<WizardStep>('secret');
+  const [merkleProof, setMerkleProof] = useState<MerkleProofData | null>(null);
+  const [isCheckingEligibility, setIsCheckingEligibility] = useState(false);
   const [proofState, setProofState] = useState<ProofState>({
     stage: 'idle',
     message: '',
@@ -156,8 +188,18 @@ export function ProposalView() {
 
   const isActive = !proposal.isFinalized && currentTime < proposal.votingEndsAt;
   const isEnded = !proposal.isFinalized && currentTime >= proposal.votingEndsAt;
-  const totalVotes = proposal.yesVotes + proposal.noVotes;
-  const yesPercent = totalVotes > 0 ? Math.round((proposal.yesVotes / totalVotes) * 100) : 0;
+
+  // Calculate total votes and percentages for multi-choice support
+  const voteCounts = proposal.voteCounts || [proposal.noVotes || 0, proposal.yesVotes || 0];
+  const totalVotes = voteCounts.reduce((sum, count) => sum + count, 0);
+  const votePercentages = voteCounts.map(count =>
+    totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0
+  );
+  // For backwards compatibility with binary yes/no display
+  const yesPercent = votePercentages[1] || 0;
+  // Find the winning option
+  const winningIndex = voteCounts.indexOf(Math.max(...voteCounts));
+  const isBinaryVote = (proposal.numOptions || 2) === 2;
 
   const formatTimeRemaining = () => {
     const diff = proposal.votingEndsAt - currentTime;
@@ -171,13 +213,48 @@ export function ProposalView() {
     return `${hours}h ${mins}m left`;
   };
 
-  const handleContinueToVote = () => {
+  const handleContinueToVote = async () => {
     if (!voterSecret) {
       setError('Please enter your voter secret');
       return;
     }
+
     setError(null);
-    setWizardStep('vote');
+    setIsCheckingEligibility(true);
+
+    try {
+      // Get merkle proof for the voter
+      const result = await getMerkleProofForVoter(voterSecret, proposal!.id);
+
+      if (!result.success || !result.proof) {
+        throw new Error(result.error || 'Failed to get merkle proof');
+      }
+
+      // Check if merkle root matches proposal's voters_root (if available)
+      const proposalRoot = proposal!.votersRoot?.toLowerCase();
+      const computedRoot = result.proof.votersRoot.toLowerCase();
+
+      // Note: In demo mode, roots may not match. That's okay for hackathon demo.
+      if (proposalRoot && proposalRoot !== '0x7f3a8b2c9d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a') {
+        // Only validate if proposal has a real voters_root (not demo placeholder)
+        if (computedRoot !== proposalRoot) {
+          console.warn('Merkle root mismatch - using demo mode');
+        }
+      }
+
+      // Store merkle proof for use in vote submission
+      setMerkleProof({
+        votersRoot: result.proof.votersRoot,
+        siblings: result.proof.siblings,
+        pathIndices: result.proof.pathIndices,
+      });
+
+      setWizardStep('vote');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to verify eligibility');
+    } finally {
+      setIsCheckingEligibility(false);
+    }
   };
 
   const handleSubmitVote = async () => {
@@ -200,7 +277,9 @@ export function ProposalView() {
         {
           voterSecret,
           proposalId: proposal.id,
-          vote: selectedVote === 1,
+          vote: selectedVote, // Pass vote option index (0 to numOptions-1)
+          numOptions: proposal.numOptions || 2, // Support multi-choice
+          merkleProof: merkleProof || undefined, // Pass merkle proof if available
         },
         (stage, message, progress) => {
           setProofState({
@@ -237,7 +316,7 @@ export function ProposalView() {
       const signature = await submitVoteTransaction(
         publicKey,
         proposal.id,
-        selectedVote === 1,
+        selectedVote, // Pass vote option index directly
         proofResult.proof.nullifierBytes,
         proofResult.proof.bytes,
         signTransaction
@@ -327,31 +406,35 @@ export function ProposalView() {
           <button
             className="submit-btn"
             onClick={handleContinueToVote}
-            disabled={!voterSecret}
+            disabled={!voterSecret || isCheckingEligibility}
           >
-            Continue
+            {isCheckingEligibility ? 'Checking eligibility...' : 'Continue'}
           </button>
         </div>
       )}
 
       {/* Step 2: Vote Selection */}
-      {wizardStep === 'vote' && (
+      {wizardStep === 'vote' && proposal && (
         <div className="wizard-content">
-          <div className="vote-options" role="group" aria-label="Vote options">
-            <button
-              className={`vote-option approve ${selectedVote === 1 ? 'selected' : ''}`}
-              onClick={() => setSelectedVote(1)}
-              aria-pressed={selectedVote === 1}
-            >
-              <span className="vote-option-label">YES</span>
-            </button>
-            <button
-              className={`vote-option reject ${selectedVote === 0 ? 'selected' : ''}`}
-              onClick={() => setSelectedVote(0)}
-              aria-pressed={selectedVote === 0}
-            >
-              <span className="vote-option-label">NO</span>
-            </button>
+          <div
+            className={`vote-options ${(proposal.numOptions || 2) > 2 ? 'multi-choice' : ''}`}
+            role="group"
+            aria-label="Vote options"
+          >
+            {(proposal.optionLabels || ['Reject', 'Approve']).map((label, index) => (
+              <button
+                key={index}
+                className={`vote-option ${
+                  (proposal.numOptions || 2) === 2
+                    ? (index === 1 ? 'approve' : 'reject')
+                    : 'multi'
+                } ${selectedVote === index ? 'selected' : ''}`}
+                onClick={() => setSelectedVote(index)}
+                aria-pressed={selectedVote === index}
+              >
+                <span className="vote-option-label">{label}</span>
+              </button>
+            ))}
           </div>
 
           <button
@@ -392,12 +475,12 @@ export function ProposalView() {
           <div className="success-state">
             <h3 className="success-title">Vote Recorded</h3>
 
-            {proofState.proofDetails && (
+            {proofState.proofDetails && proposal && (
               <div className="proof-details">
                 <div className="proof-detail-row">
                   <span className="proof-detail-label">Vote</span>
                   <span className="proof-detail-value">
-                    {selectedVote === 1 ? 'YES' : 'NO'}
+                    {proposal.optionLabels?.[selectedVote ?? 0] || (selectedVote === 1 ? 'YES' : 'NO')}
                   </span>
                 </div>
                 <div className="proof-detail-row">
@@ -427,30 +510,83 @@ export function ProposalView() {
       )}
 
       {error && (
-        <div className="error-message">
-          <svg viewBox="0 0 16 16" fill="currentColor" width="16" height="16">
-            <path d="M8 1a7 7 0 100 14A7 7 0 008 1zM7.25 4.5a.75.75 0 011.5 0v4a.75.75 0 01-1.5 0v-4zm.75 7.5a1 1 0 100-2 1 1 0 000 2z" />
-          </svg>
-          {error}
+        <div className="error-message-container">
+          <div className="error-message">
+            <svg viewBox="0 0 16 16" fill="currentColor" width="16" height="16">
+              <path d="M8 1a7 7 0 100 14A7 7 0 008 1zM7.25 4.5a.75.75 0 011.5 0v4a.75.75 0 01-1.5 0v-4zm.75 7.5a1 1 0 100-2 1 1 0 000 2z" />
+            </svg>
+            <span>{error}</span>
+          </div>
+          <div className="error-recovery">
+            {error.includes('already voted') && (
+              <p className="error-hint">Each voter can only vote once per proposal. Your previous vote has been recorded.</p>
+            )}
+            {error.includes('wallet') && (
+              <p className="error-hint">Please connect your Solana wallet (Phantom, Solflare, etc.) to submit your vote.</p>
+            )}
+            {error.includes('not found') && (
+              <p className="error-hint">Make sure you're using the correct secret key that was registered for this proposal.</p>
+            )}
+            {error.includes('Proof') && (
+              <p className="error-hint">Try refreshing the page and generating the proof again. This uses your browser's computing power.</p>
+            )}
+            {(wizardStep === 'vote' || error.includes('Proof')) && (
+              <button
+                className="error-retry-btn"
+                onClick={() => {
+                  setError(null);
+                  if (wizardStep !== 'secret') {
+                    setWizardStep('secret');
+                    setMerkleProof(null);
+                    setSelectedVote(null);
+                  }
+                }}
+              >
+                Try Again
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
   );
 
   // Results Section Component
-  const ResultsSection = () => (
-    <div className="results-section">
-      <h3 className="results-title">Final Results</h3>
-      <div className={`result-verdict ${yesPercent >= 50 ? 'approved' : 'rejected'}`}>
-        {yesPercent >= 50 ? 'Approved' : 'Rejected'}
+  const ResultsSection = () => {
+    const winningLabel = proposal.optionLabels?.[winningIndex] || (winningIndex === 1 ? 'Approved' : 'Rejected');
+    const winningPercent = votePercentages[winningIndex] || 0;
+
+    return (
+      <div className="results-section">
+        <h3 className="results-title">Final Results</h3>
+        {isBinaryVote ? (
+          // Binary result display
+          <>
+            <div className={`result-verdict ${yesPercent >= 50 ? 'approved' : 'rejected'}`}>
+              {yesPercent >= 50 ? 'Approved' : 'Rejected'}
+            </div>
+            <div className="result-summary">
+              <span>Total votes: {totalVotes}</span>
+              <span>Approval: {yesPercent}%</span>
+              <span>{proposal.isFinalized ? 'Finalized on-chain' : 'Awaiting finalization'}</span>
+            </div>
+          </>
+        ) : (
+          // Multi-choice result display
+          <>
+            <div className="result-verdict approved">
+              Winner: {winningLabel}
+            </div>
+            <div className="result-summary">
+              <span>Total votes: {totalVotes}</span>
+              <span>Winning: {winningPercent}% ({voteCounts[winningIndex]} votes)</span>
+              <span>{proposal.isFinalized ? 'Finalized on-chain' : 'Awaiting finalization'}</span>
+            </div>
+          </>
+        )}
       </div>
-      <div className="result-summary">
-        <span>Total votes: {totalVotes}</span>
-        <span>Approval: {yesPercent}%</span>
-        <span>{proposal.isFinalized ? 'Finalized on-chain' : 'Awaiting finalization'}</span>
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="proposal-view">
@@ -479,22 +615,46 @@ export function ProposalView() {
 
       {/* Vote Progress */}
       <div className="vote-progress-container">
-        <div className="vote-progress-header">
-          <span className="vote-progress-label">Approve</span>
-          <span className="vote-progress-label">Reject</span>
-        </div>
-        <div className="vote-progress-bar">
-          <div className="vote-progress-yes" style={{ width: `${yesPercent}%` }} />
-          <div className="vote-progress-no" style={{ width: `${100 - yesPercent}%` }} />
-        </div>
-        <div className="vote-counts">
-          <span className="vote-count-item yes">
-            <span className="vote-count-value">{proposal.yesVotes}</span> votes ({yesPercent}%)
-          </span>
-          <span className="vote-count-item no">
-            <span className="vote-count-value">{proposal.noVotes}</span> votes ({100 - yesPercent}%)
-          </span>
-        </div>
+        {isBinaryVote ? (
+          // Binary yes/no vote display
+          <>
+            <div className="vote-progress-header">
+              <span className="vote-progress-label">{proposal.optionLabels?.[1] || 'Approve'}</span>
+              <span className="vote-progress-label">{proposal.optionLabels?.[0] || 'Reject'}</span>
+            </div>
+            <div className="vote-progress-bar">
+              <div className="vote-progress-yes" style={{ width: `${yesPercent}%` }} />
+              <div className="vote-progress-no" style={{ width: `${100 - yesPercent}%` }} />
+            </div>
+            <div className="vote-counts">
+              <span className="vote-count-item yes">
+                <span className="vote-count-value">{voteCounts[1]}</span> votes ({yesPercent}%)
+              </span>
+              <span className="vote-count-item no">
+                <span className="vote-count-value">{voteCounts[0]}</span> votes ({100 - yesPercent}%)
+              </span>
+            </div>
+          </>
+        ) : (
+          // Multi-choice vote display
+          <div className="multi-choice-results">
+            {(proposal.optionLabels || []).map((label, index) => (
+              <div key={index} className={`multi-choice-option ${index === winningIndex && totalVotes > 0 ? 'winning' : ''}`}>
+                <div className="multi-choice-header">
+                  <span className="multi-choice-label">{label}</span>
+                  <span className="multi-choice-percent">{votePercentages[index]}%</span>
+                </div>
+                <div className="multi-choice-bar">
+                  <div
+                    className="multi-choice-fill"
+                    style={{ width: `${votePercentages[index]}%` }}
+                  />
+                </div>
+                <span className="multi-choice-count">{voteCounts[index]} votes</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Voting Wizard - Only show if active */}

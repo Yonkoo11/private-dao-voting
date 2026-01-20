@@ -1,0 +1,18 @@
+{
+  "proposalId": 1,
+  "voters": [
+    {
+      "commitment": "0x14af09e9e9daae119acebcc6d7592a2ba5cb84eb0b68c37a69a5b25a300b5821",
+      "addedAt": "2026-01-19T18:27:47.003Z",
+      "index": 0
+    },
+    {
+      "commitment": "0x12a02e73d27fe3df6548419cd8e84ae84acd36850eded63199c4b121c2ed98f7",
+      "addedAt": "2026-01-19T18:27:47.007Z",
+      "index": 1
+    }
+  ],
+  "treeDepth": 20,
+  "createdAt": "2026-01-19T18:27:47.007Z",
+  "updatedAt": "2026-01-19T18:27:47.007Z"
+}

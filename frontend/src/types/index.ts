@@ -1,13 +1,24 @@
 // Core types for Private DAO Voting
 
+export interface VoteOption {
+  index: number;
+  label: string;
+  count: number;
+}
+
 export interface Proposal {
   id: number;
   title: string;
   description: string;
   authority: string;
   votersRoot: string;
-  yesVotes: number;
-  noVotes: number;
+  // Multi-choice voting support
+  numOptions: number; // 2-8 (2 = binary yes/no)
+  voteCounts: number[]; // Counts for each option
+  optionLabels: string[]; // Labels for each option
+  // Legacy fields for backwards compatibility
+  yesVotes?: number;
+  noVotes?: number;
   votingEndsAt: number; // Unix timestamp
   isFinalized: boolean;
   createdAt: number;
@@ -19,7 +30,8 @@ export type ProposalStatus = 'active' | 'ended' | 'finalized';
 export interface VoteInput {
   proposalId: number;
   voterSecret: string;
-  vote: 0 | 1; // 0 = NO, 1 = YES
+  vote: number; // 0 to numOptions-1
+  numOptions: number; // Number of options (default 2)
 }
 
 export type ProofStage =
@@ -54,4 +66,30 @@ export interface AppContextState {
   isLoading: boolean;
   error: string | null;
   userRole: UserRole;
+}
+
+// Threshold Encryption Types
+export interface EncryptedVoteData {
+  ciphertext: string;  // Hex-encoded ciphertext
+  nonce: string;       // Hex-encoded nonce
+  tag: string;         // Hex-encoded auth tag
+}
+
+export interface CommitteeMember {
+  pubkey: string;      // Solana public key
+  shareIndex: number;  // Share index (1 to N)
+  hasSubmitted: boolean; // Whether they've submitted their share for decryption
+}
+
+export interface ThresholdConfig {
+  threshold: number;    // M - minimum shares needed
+  totalMembers: number; // N - total committee size
+  committee: CommitteeMember[];
+  encryptionEnabled: boolean;
+}
+
+export interface ProposalWithEncryption extends Proposal {
+  thresholdConfig?: ThresholdConfig;
+  encryptedVotes?: EncryptedVoteData[];
+  isDecrypted: boolean;
 }

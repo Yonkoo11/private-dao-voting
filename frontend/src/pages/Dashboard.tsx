@@ -5,6 +5,7 @@ import { ProposalCard } from '../components/shared';
 import type { Proposal, FilterType } from '../types';
 
 // Demo proposals as fallback when chain is unavailable
+// Updated to support multi-choice voting
 const DEMO_PROPOSALS: Proposal[] = [
   {
     id: 1,
@@ -12,6 +13,9 @@ const DEMO_PROPOSALS: Proposal[] = [
     description: 'Allocate 1000 SOL from the DAO treasury to the core development fund for protocol improvements and security audits.',
     authority: 'DaoAuth...xyz',
     votersRoot: '0x7f3a8b...',
+    numOptions: 2,
+    voteCounts: [3, 12], // [No, Yes]
+    optionLabels: ['Reject', 'Approve'],
     yesVotes: 12,
     noVotes: 3,
     votingEndsAt: Date.now() - 3600000,
@@ -24,6 +28,9 @@ const DEMO_PROPOSALS: Proposal[] = [
     description: 'Establish a 500 SOL grant program to fund community-driven development initiatives and educational content.',
     authority: 'DaoAuth...xyz',
     votersRoot: '0x7f3a8b...',
+    numOptions: 2,
+    voteCounts: [5, 8], // [No, Yes]
+    optionLabels: ['Reject', 'Approve'],
     yesVotes: 8,
     noVotes: 5,
     votingEndsAt: Date.now() - 1800000,
@@ -33,10 +40,13 @@ const DEMO_PROPOSALS: Proposal[] = [
   {
     id: 3,
     title: 'Protocol Fee Adjustment',
-    description: 'Reduce protocol fees from 0.3% to 0.1% to increase competitiveness and attract more users to the platform.',
+    description: 'Choose the new protocol fee rate to increase competitiveness and attract more users.',
     authority: 'DaoAuth...xyz',
     votersRoot: '0x7f3a8b...',
-    yesVotes: 1,
+    numOptions: 4, // Multi-choice: 4 options
+    voteCounts: [0, 1, 0, 0], // Votes for each option
+    optionLabels: ['Keep 0.3%', 'Reduce to 0.2%', 'Reduce to 0.1%', 'Remove fees'],
+    yesVotes: 1, // Legacy
     noVotes: 0,
     votingEndsAt: Date.now() + 3600000,
     isFinalized: false,
@@ -48,11 +58,29 @@ const DEMO_PROPOSALS: Proposal[] = [
     description: 'Approve the distribution of 10,000 governance tokens to early contributors and active community members.',
     authority: 'DaoAuth...xyz',
     votersRoot: '0x7f3a8b...',
+    numOptions: 2,
+    voteCounts: [0, 0],
+    optionLabels: ['Reject', 'Approve'],
     yesVotes: 0,
     noVotes: 0,
     votingEndsAt: Date.now() + 86400000,
     isFinalized: false,
     createdAt: Date.now() - 3600000,
+  },
+  {
+    id: 5,
+    title: 'New Logo Design',
+    description: 'Vote for your preferred new logo design from the community submissions.',
+    authority: 'DaoAuth...xyz',
+    votersRoot: '0x7f3a8b...',
+    numOptions: 5, // Multi-choice: 5 logo options
+    voteCounts: [2, 5, 3, 1, 4], // Votes for each design
+    optionLabels: ['Design A', 'Design B', 'Design C', 'Design D', 'Design E'],
+    yesVotes: 15,
+    noVotes: 0,
+    votingEndsAt: Date.now() + 172800000, // 2 days
+    isFinalized: false,
+    createdAt: Date.now() - 7200000,
   },
 ];
 
@@ -118,7 +146,13 @@ export function Dashboard() {
   }), [proposals]);
 
   const totalVotes = useMemo(() =>
-    proposals.reduce((sum, p) => sum + p.yesVotes + p.noVotes, 0),
+    proposals.reduce((sum, p) => {
+      // Use voteCounts if available, otherwise fall back to legacy yesVotes/noVotes
+      if (p.voteCounts && p.voteCounts.length > 0) {
+        return sum + p.voteCounts.reduce((a, b) => a + b, 0);
+      }
+      return sum + (p.yesVotes || 0) + (p.noVotes || 0);
+    }, 0),
   [proposals]);
 
   const filters: { key: FilterType; label: string }[] = [

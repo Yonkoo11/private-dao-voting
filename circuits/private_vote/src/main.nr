@@ -1,12 +1,12 @@
 // ============================================================================
-// Private DAO Voting Circuit
+// Private DAO Voting Circuit (Multi-Choice)
 // ============================================================================
 // Proves that a voter is eligible AND casts a vote WITHOUT revealing identity.
 //
 // What this proves:
 // 1. "I am in the eligible voters tree" (membership/inclusion proof)
 // 2. "This nullifier is mine" (prevents double voting)
-// 3. "I'm voting yes (1) or no (0)"
+// 3. "I'm voting for option X" (0 to num_options-1)
 //
 // What stays hidden:
 // - Which voter you are
@@ -19,6 +19,11 @@
 // - Same voter + same proposal = same nullifier
 // - Contract rejects duplicate nullifiers
 // - But nullifier can't be traced back to voter
+//
+// Multi-choice voting:
+// - Supports up to 8 vote options (0-7)
+// - num_options is a public input to constrain valid range
+// - Backwards compatible: binary votes use num_options=2
 // ============================================================================
 
 use dep::poseidon::poseidon::bn254::hash_2 as poseidon_hash;
@@ -26,6 +31,10 @@ use dep::poseidon::poseidon::bn254::hash_2 as poseidon_hash;
 // Tree configuration
 // 20 levels = 2^20 = ~1 million possible voters (practical for most DAOs)
 global TREE_DEPTH: u32 = 20;
+
+// Multi-choice voting configuration
+// Maximum 8 options (0-7), configurable per proposal via num_options
+global MAX_OPTIONS: u8 = 8;
 
 // ============================================================================
 // Hash Functions
@@ -85,13 +94,14 @@ fn compute_merkle_root<let N: u32>(
 // Main Circuit
 // ============================================================================
 
-/// Cast a private vote
+/// Cast a private vote (multi-choice)
 ///
 /// PUBLIC INPUTS (visible on-chain):
 /// - voters_root: Merkle root of eligible voters tree
 /// - nullifier: Unique per voter+proposal (prevents double voting)
 /// - proposal_id: Which proposal we're voting on
-/// - vote: The vote choice (0 = no, 1 = yes)
+/// - vote: The vote choice (0 to num_options-1)
+/// - num_options: Number of valid options for this proposal (2-8)
 ///
 /// PRIVATE INPUTS (hidden, known only to voter):
 /// - secret: Voter's secret key (used to derive leaf and nullifier)
@@ -103,23 +113,28 @@ fn main(
     nullifier: pub Field,
     proposal_id: pub Field,
     vote: pub Field,
+    num_options: pub Field,
     // Private inputs
     secret: Field,
     path_indices: [u1; TREE_DEPTH],
     siblings: [Field; TREE_DEPTH],
 ) {
-    // 1. Verify vote is valid (0 or 1)
-    assert((vote == 0) | (vote == 1), "Vote must be 0 (no) or 1 (yes)");
+    // 1. Verify num_options is valid (2-8)
+    assert(num_options as u8 >= 2, "Must have at least 2 options");
+    assert(num_options as u8 <= MAX_OPTIONS, "Maximum 8 options supported");
 
-    // 2. Compute leaf from secret
+    // 2. Verify vote is valid (0 to num_options-1)
+    assert(vote as u8 < num_options as u8, "Vote must be less than num_options");
+
+    // 3. Compute leaf from secret
     let leaf = compute_leaf(secret);
 
-    // 3. Verify nullifier matches secret + proposal
+    // 4. Verify nullifier matches secret + proposal
     //    This binds the proof to this specific proposal
     let computed_nullifier = compute_nullifier(secret, proposal_id);
     assert(computed_nullifier == nullifier, "Nullifier mismatch");
 
-    // 4. Verify voter is in the tree (INCLUSION proof)
+    // 5. Verify voter is in the tree (INCLUSION proof)
     //    The leaf must be non-zero and the path must lead to the root
     let computed_root = compute_merkle_root(leaf, path_indices, siblings);
     assert(computed_root == voters_root, "Not in voters tree");
@@ -177,17 +192,17 @@ fn test_merkle_root_simple() {
 
 #[test]
 fn test_full_voting_flow() {
-    // Simulate a complete voting scenario
+    // Simulate a complete voting scenario (binary yes/no)
     let secret: Field = 0x1234567890abcdef;
     let proposal_id: Field = 1;
     let vote: Field = 1; // voting yes
+    let num_options: Field = 2; // binary vote
 
     // Compute what the prover would compute
     let leaf = compute_leaf(secret);
     let nullifier = compute_nullifier(secret, proposal_id);
 
     // Create a simple tree with just this voter
-    // For testing, we'll use a small tree and compute the root manually
     let siblings: [Field; TREE_DEPTH] = [0; TREE_DEPTH];
     let path_indices: [u1; TREE_DEPTH] = [0; TREE_DEPTH];
 
@@ -195,9 +210,44 @@ fn test_full_voting_flow() {
     let voters_root = compute_merkle_root(leaf, path_indices, siblings);
 
     // Verify all assertions would pass
-    assert((vote == 0) | (vote == 1), "Vote must be 0 or 1");
+    assert(num_options as u8 >= 2, "Must have at least 2 options");
+    assert(num_options as u8 <= MAX_OPTIONS, "Max 8 options");
+    assert(vote as u8 < num_options as u8, "Vote must be less than num_options");
     assert(compute_nullifier(secret, proposal_id) == nullifier, "Nullifier mismatch");
     assert(compute_merkle_root(leaf, path_indices, siblings) == voters_root, "Root mismatch");
+}
+
+#[test]
+fn test_multi_choice_voting() {
+    // Test multi-choice voting with 4 options
+    let secret: Field = 0xabcdef123456;
+    let proposal_id: Field = 42;
+    let num_options: Field = 4; // 4 choices: 0, 1, 2, 3
+
+    // Test voting for option 2
+    let vote: Field = 2;
+    assert(vote as u8 < num_options as u8, "Vote 2 should be valid for 4 options");
+
+    // Test voting for option 3 (max valid)
+    let vote_max: Field = 3;
+    assert(vote_max as u8 < num_options as u8, "Vote 3 should be valid for 4 options");
+
+    // Verify nullifier still works
+    let nullifier = compute_nullifier(secret, proposal_id);
+    assert(nullifier != 0, "Nullifier should be non-zero");
+}
+
+#[test]
+fn test_max_options() {
+    // Test with maximum 8 options
+    let num_options: Field = 8;
+    assert(num_options as u8 <= MAX_OPTIONS, "8 options should be valid");
+
+    // All votes 0-7 should be valid
+    for i in 0..8 {
+        let vote: Field = i as Field;
+        assert(vote as u8 < num_options as u8, "Votes 0-7 should be valid");
+    }
 }
 
 #[test]
@@ -215,12 +265,20 @@ fn test_different_voters_different_nullifiers() {
 
 #[test]
 fn test_vote_validation() {
-    // Valid votes
+    // Valid votes for binary (2 options)
+    let num_options: Field = 2;
     let vote_no: Field = 0;
     let vote_yes: Field = 1;
 
-    assert((vote_no == 0) | (vote_no == 1), "0 should be valid");
-    assert((vote_yes == 0) | (vote_yes == 1), "1 should be valid");
+    assert(vote_no as u8 < num_options as u8, "0 should be valid");
+    assert(vote_yes as u8 < num_options as u8, "1 should be valid");
+
+    // Valid votes for multi-choice (5 options)
+    let num_options_5: Field = 5;
+    for i in 0..5 {
+        let vote: Field = i as Field;
+        assert(vote as u8 < num_options_5 as u8, "Votes 0-4 should be valid for 5 options");
+    }
 }
 
 // ============================================================================
@@ -398,10 +456,11 @@ fn test_poseidon_hash_properties() {
 
 #[test]
 fn test_complete_voting_scenario_no_vote() {
-    // Complete flow with vote = 0
+    // Complete flow with vote = 0 (binary)
     let secret: Field = 0xbeef;
     let proposal_id: Field = 100;
     let vote: Field = 0; // voting NO
+    let num_options: Field = 2; // binary
 
     let leaf = compute_leaf(secret);
     let nullifier = compute_nullifier(secret, proposal_id);
@@ -411,7 +470,31 @@ fn test_complete_voting_scenario_no_vote() {
     let voters_root = compute_merkle_root(leaf, path_indices, siblings);
 
     // All assertions from main should pass
-    assert((vote == 0) | (vote == 1), "Vote must be 0 or 1");
+    assert(num_options as u8 >= 2, "Must have at least 2 options");
+    assert(vote as u8 < num_options as u8, "Vote must be valid");
+    assert(compute_nullifier(secret, proposal_id) == nullifier, "Nullifier mismatch");
+    assert(compute_merkle_root(leaf, path_indices, siblings) == voters_root, "Root mismatch");
+}
+
+#[test]
+fn test_complete_multi_choice_scenario() {
+    // Complete flow with multi-choice (4 options)
+    let secret: Field = 0xdeadbeef;
+    let proposal_id: Field = 200;
+    let vote: Field = 2; // voting for option 2
+    let num_options: Field = 4;
+
+    let leaf = compute_leaf(secret);
+    let nullifier = compute_nullifier(secret, proposal_id);
+
+    let siblings: [Field; TREE_DEPTH] = [0; TREE_DEPTH];
+    let path_indices: [u1; TREE_DEPTH] = [0; TREE_DEPTH];
+    let voters_root = compute_merkle_root(leaf, path_indices, siblings);
+
+    // All assertions from main should pass
+    assert(num_options as u8 >= 2, "Must have at least 2 options");
+    assert(num_options as u8 <= MAX_OPTIONS, "Max 8 options");
+    assert(vote as u8 < num_options as u8, "Vote must be valid");
     assert(compute_nullifier(secret, proposal_id) == nullifier, "Nullifier mismatch");
     assert(compute_merkle_root(leaf, path_indices, siblings) == voters_root, "Root mismatch");
 }
